@@ -86,18 +86,14 @@ void scan_mod_layer_keys(uint8_t layer) {
 layer_state_t layer_state_set_user(layer_state_t state) {
     uint8_t highest_layer = get_highest_layer(state);
     
-    // CASE 1: ENTERING a Fn Layer (1 or 3)
-    if ((highest_layer == MAC_FN || highest_layer == WIN_FN) && !is_fn_layer_active) {
-        // A. Run the scan for the active layer
+    // Check if the current highest layer is a Fn layer (1 or 3)
+    bool currently_fn = (highest_layer == MAC_FN || highest_layer == WIN_FN);
+
+    if (currently_fn) {
+        // Run the scan for the active layer to update the mask
         scan_mod_layer_keys(highest_layer);
-        
-        // B. Mark flag as active
         is_fn_layer_active = true;
-    } 
-    
-    // CASE 2: LEAVING a Fn Layer
-    else if ((highest_layer != MAC_FN && highest_layer != WIN_FN) && is_fn_layer_active) {
-        // A. Mark flag as inactive
+    } else {
         is_fn_layer_active = false;
     }
     
@@ -113,7 +109,6 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
                 rgb_matrix_set_color(i, 0, 0, 0);
             }
         }
-        return false;
     }
     return true;
 }
