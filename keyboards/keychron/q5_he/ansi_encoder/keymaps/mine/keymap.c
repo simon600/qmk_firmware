@@ -114,6 +114,8 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (!process_caps_word(keycode, record)) { return false; }
+
     switch (keycode) {
         case KC_F24: // This is our hijacked "Magic" key
             if (record->event.pressed) {
