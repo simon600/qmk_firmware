@@ -1,19 +1,3 @@
-/* Copyright 2024 ~ 2025 @ Keychron (https://www.keychron.com)
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include QMK_KEYBOARD_H
 #include "keychron_common.h"
 
@@ -26,6 +10,18 @@ enum layers {
 
 #define FN_MAC MO(MAC_FN)
 #define FN_WIN MO(WIN_FN)
+
+// --- CONFIGURATION ---
+#define MOD_LAYER 3
+
+// --- STATE STORAGE ---
+// --- STATE STORAGE ---
+static bool mod_led_mask[256];      // Lookup table for fast O(1) checks in render loop
+static bool is_mod_layer_active = false; // Tracks if we are currently in the layer
+
+// Storage for restoring the previous RGB state
+static uint8_t saved_rgb_mode;
+static HSV saved_rgb_hsv;
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -71,6 +67,78 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
     [WIN_FN]   = {ENCODER_CCW_CW(UG_VALD, UG_VALU)},
 };
 #endif // ENCODER_MAP_ENABLE
+
+void scan_mod_layer_keys(void) {
+    // Clear mask
+    for (uint16_t i = 0; i < 256; i++) {
+        mod_led_mask[i] = false;
+    }
+
+    for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+        for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+            // Check keys specifically on the MOD_LAYER
+            uint16_t keycode = keymap_key_to_keycode(MOD_LAYER, (keypos_t){col, row});
+            
+            if (keycode != KC_TRNS) {
+                uint8_t led_index = g_led_config.matrix_co[row][col];
+                if (led_index != NO_LED) {
+                    mod_led_mask[led_index] = true;
+                }
+            }
+        }
+    }
+}
+
+layer_state_t layer_state_set_user(layer_state_t state) {
+    uint8_t highest_layer = get_highest_layer(state);
+    
+    // CASE 1: ENTERING the Mod Layer
+    if (highest_layer == MOD_LAYER && !is_mod_layer_active) {
+        // A. Save current state
+        saved_rgb_mode = rgb_matrix_get_mode();
+        saved_rgb_hsv = rgb_matrix_get_hsv();
+        
+        // B. Run the scan once
+        scan_mod_layer_keys();
+
+        // FORCE MODE to Solid Color (Stops the animation!)
+        rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
+        
+        // C. Black out the board (to make the mod keys pop)
+        // Note: rgb_matrix_indicators_advanced_user will handle the coloring
+        
+        // D. Mark flag as active
+        is_mod_layer_active = true;
+    } 
+    
+    // CASE 2: LEAVING the Mod Layer
+    else if (highest_layer != MOD_LAYER && is_mod_layer_active) {
+        // A. Restore previous mode
+        rgb_matrix_mode_noeeprom(saved_rgb_mode);
+        
+        // B. Restore previous color
+        rgb_matrix_sethsv_noeeprom(saved_rgb_hsv.h, saved_rgb_hsv.s, saved_rgb_hsv.v);
+        
+        // C. Mark flag as inactive
+        is_mod_layer_active = false;
+    }
+    
+    return state;
+}
+
+bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
+    if (is_mod_layer_active) {
+        for (uint8_t i = led_min; i < led_max; i++) {
+            if (mod_led_mask[i]) {
+                rgb_matrix_set_color(i, 255, 255, 255);
+            } else {
+                rgb_matrix_set_color(i, 0, 0, 0);
+            }
+        }
+        return false;
+    }
+    return true;
+}
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
