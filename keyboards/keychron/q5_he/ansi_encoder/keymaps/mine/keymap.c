@@ -17,10 +17,6 @@ enum layers {
 static bool mod_led_mask[256];      // Lookup table for fast O(1) checks in render loop
 static bool is_fn_layer_active = false; // Tracks if we are currently in either Fn layer
 
-// Storage for restoring the previous RGB state
-static uint8_t saved_rgb_mode;
-static HSV saved_rgb_hsv;
-
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [MAC_BASE] = LAYOUT_ansi_101(
@@ -92,32 +88,16 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     
     // CASE 1: ENTERING a Fn Layer (1 or 3)
     if ((highest_layer == MAC_FN || highest_layer == WIN_FN) && !is_fn_layer_active) {
-        // A. Save current state
-        saved_rgb_mode = rgb_matrix_get_mode();
-        saved_rgb_hsv = rgb_matrix_get_hsv();
-        
-        // B. Run the scan for the active layer
+        // A. Run the scan for the active layer
         scan_mod_layer_keys(highest_layer);
-
-        // FORCE MODE to Solid Color (Stops the animation!)
-        rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
         
-        // C. Black out the board (to make the mod keys pop)
-        rgb_matrix_sethsv_noeeprom(0, 0, 0);
-        
-        // D. Mark flag as active
+        // B. Mark flag as active
         is_fn_layer_active = true;
     } 
     
     // CASE 2: LEAVING a Fn Layer
     else if ((highest_layer != MAC_FN && highest_layer != WIN_FN) && is_fn_layer_active) {
-        // A. Restore previous mode
-        rgb_matrix_mode_noeeprom(saved_rgb_mode);
-        
-        // B. Restore previous color
-        rgb_matrix_sethsv_noeeprom(saved_rgb_hsv.h, saved_rgb_hsv.s, saved_rgb_hsv.v);
-        
-        // C. Mark flag as inactive
+        // A. Mark flag as inactive
         is_fn_layer_active = false;
     }
     
