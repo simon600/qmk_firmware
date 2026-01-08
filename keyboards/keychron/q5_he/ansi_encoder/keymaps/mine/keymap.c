@@ -72,7 +72,7 @@ void scan_mod_layer_keys(uint8_t layer) {
         for (uint8_t col = 0; col < MATRIX_COLS; col++) {
             // Check keys specifically on the target layer
             uint16_t keycode = keymap_key_to_keycode(layer, (keypos_t){col, row});
-            
+
             if (keycode != KC_TRNS) {
                 uint8_t led_index = g_led_config.matrix_co[row][col];
                 if (led_index != NO_LED) {
@@ -84,19 +84,19 @@ void scan_mod_layer_keys(uint8_t layer) {
 }
 
 layer_state_t layer_state_set_user(layer_state_t state) {
-    uint8_t highest_layer = get_highest_layer(state);
-    
-    // Check if the current highest layer is a Fn layer (1 or 3)
-    bool currently_fn = (highest_layer == MAC_FN || highest_layer == WIN_FN);
+    bool win_fn_active = (state & (1UL << WIN_FN));
+    bool mac_fn_active = (state & (1UL << MAC_FN));
 
-    if (currently_fn) {
-        // Run the scan for the active layer to update the mask
-        scan_mod_layer_keys(highest_layer);
+    if (win_fn_active) {
+        scan_mod_layer_keys(WIN_FN);
+        is_fn_layer_active = true;
+    } else if (mac_fn_active) {
+        scan_mod_layer_keys(MAC_FN);
         is_fn_layer_active = true;
     } else {
         is_fn_layer_active = false;
     }
-    
+
     return state;
 }
 
@@ -106,7 +106,7 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
             if (mod_led_mask[i]) {
                 rgb_matrix_set_color(i, 255, 255, 255);
             } else {
-                rgb_matrix_set_color(i, 0, 0, 0);
+                //rgb_matrix_set_color(i, 0, 0, 0);
             }
         }
     }
