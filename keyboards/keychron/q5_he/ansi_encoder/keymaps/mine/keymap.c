@@ -11,7 +11,7 @@ enum layers {
 
 #define FN_MAC MO(MAC_FN)
 #define FN_WIN MO(WIN_FN)
-#define TG_GAMING TG(GAMING)
+#define TG_GMG TG(GAMING)
 
 // --- CONFIGURATION ---
 
@@ -20,6 +20,14 @@ static bool mod_led_mask[256];      // Lookup table for fast O(1) checks in rend
 static bool is_fn_layer_active = false; // Tracks if we are currently in either Fn layer
 static bool is_gaming_layer_active = false; // Tracks if we are currently in GAMING layer
 static bool rgb_adjusted_in_fn = false; // Tracks if an RGB key was pressed while in Fn layer
+
+enum {
+    TD_SLSH_BLSH = 0
+};
+
+tap_dance_action_t tap_dance_actions[] = {
+    [TD_SLSH_BLSH] = ACTION_TAP_DANCE_DOUBLE(KC_SLSH, KC_BSLS)
+};
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -48,7 +56,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_LCTL,               KC_LWIN,  KC_LALT,                                LT(WIN_FN, KC_SPC),                     KC_RALT,  FN_WIN,   KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT,            KC_P0,    KC_PDOT,  KC_PENT),
 
     [WIN_FN] = LAYOUT_ansi_101(
-        _______,                         KC_BRID,  KC_BRIU,  KC_TASK,  KC_FILE,  UG_VALD,  UG_VALU,  _______,  _______,  KC_MPLY,  KC_MNXT,  KC_MPRV,  _______,            _______,  TG(GAMING),  _______,  _______,  UG_TOGG,
+        _______,                         KC_BRID,  KC_BRIU,  KC_TASK,  KC_FILE,  UG_VALD,  UG_VALU,  _______,  _______,  KC_MPLY,  KC_MNXT,  KC_MPRV,  _______,            _______,  TG_GMG,   _______,  _______,  UG_TOGG,
         _______,               BT_HST1,  BT_HST2,  BT_HST3,  P2P4G,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  KC_DEL,             _______,  _______,  _______,  _______,  _______,
         UG_TOGG,               UG_NEXT,  UG_VALU,  UG_HUEU,  UG_SATU,  UG_SPDU,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,
         CW_TOGG,               UG_PREV,  UG_VALD,  UG_HUED,  UG_SATD,  UG_SPDD,  _______,  _______,  _______,  _______,  _______,  _______,            _______,            KC_END,   _______,  _______,  _______,  _______,
@@ -56,7 +64,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______,               _______,  _______,                                _______,                                _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
 
     [GAMING] = LAYOUT_ansi_101(
-        _______,                         _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
+        KC_ESC,                          _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
         _______,               _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
         _______,               _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,
         _______,               _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,            _______,  _______,  _______,  _______,  _______,
