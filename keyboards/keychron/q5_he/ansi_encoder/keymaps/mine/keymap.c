@@ -19,6 +19,7 @@ enum layers {
 static bool mod_led_mask[256];      // Lookup table for fast O(1) checks in render loop
 static bool is_fn_layer_active = false; // Tracks if we are currently in either Fn layer
 static bool is_gaming_layer_active = false; // Tracks if we are currently in GAMING layer
+static bool rgb_adjusted_in_fn = false; // Tracks if an RGB key was pressed while in Fn layer
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -108,12 +109,19 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 
     if (win_fn_active) {
         scan_mod_layer_keys(WIN_FN);
+        if (!is_fn_layer_active) {
+            rgb_adjusted_in_fn = false;
+        }
         is_fn_layer_active = true;
     } else if (mac_fn_active) {
         scan_mod_layer_keys(MAC_FN);
+        if (!is_fn_layer_active) {
+            rgb_adjusted_in_fn = false;
+        }
         is_fn_layer_active = true;
     } else {
         is_fn_layer_active = false;
+        rgb_adjusted_in_fn = false;
     }
 
     return state;
@@ -128,11 +136,8 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         for (uint8_t i = led_min; i < led_max; i++) {
             if (mod_led_mask[i]) {
                 rgb_matrix_set_color(i, 255, 255, 255);
-            } else {
-                // To make LEDs 50% darker we would ideally read the current color and halve it.
-                // QMK does not easily expose the current animation color per LED in this context.
-                // We leave them as-is (full brightness) instead of turning them off (black).
-                // rgb_matrix_set_color(i, 0, 0, 0);
+            } else if (!rgb_adjusted_in_fn) {
+                 rgb_matrix_set_color(i, 0, 0, 0);
             }
         }
     }
@@ -146,6 +151,25 @@ void keyboard_post_init_user(void) {
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (!process_caps_word(keycode, record)) { return false; }
+
+    if (is_fn_layer_active && record->event.pressed) {
+        switch (keycode) {
+            case UG_TOGG:
+            case UG_NEXT:
+            case UG_PREV:
+            case UG_VALU:
+            case UG_VALD:
+            case UG_HUEU:
+            case UG_HUED:
+            case UG_SATU:
+            case UG_SATD:
+            case UG_SPDU:
+            case UG_SPDD:
+            case KC_F24:
+                rgb_adjusted_in_fn = true;
+                break;
+        }
+    }
 
     switch (keycode) {
         case KC_F24: // This is our hijacked "Magic" key
