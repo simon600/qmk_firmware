@@ -199,3 +199,11 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     }
     return true;
 }
+
+#if defined(OVERRIDE_VIA_RAW_HID_RECEIVE)
+extern void via_raw_hid_receive(uint8_t src, uint8_t *data, uint8_t length);
+
+void raw_hid_receive(uint8_t src, uint8_t *data, uint8_t length) {
+    via_raw_hid_receive(src, data, length);
+}
+#endif // OVERRIDE_VIA_RAW_HID_RECEIVE
