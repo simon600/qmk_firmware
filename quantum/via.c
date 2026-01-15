@@ -294,11 +294,7 @@ __attribute__((weak)) void via_raw_hid_send(uint8_t src, uint8_t *data, uint8_t 
     raw_hid_send(data, length);
 }
 
-#if defined(OVERRIDE_VIA_RAW_HID_RECEIVE)
-void via_raw_hid_receive(uint8_t src, uint8_t *data, uint8_t length) {
-#else
 void raw_hid_receive(uint8_t src, uint8_t *data, uint8_t length) {
-#endif // OVERRIDE_VIA_RAW_HID_RECEIVE
     uint8_t *command_id   = &(data[0]);
     uint8_t *command_data = &(data[1]);
 
