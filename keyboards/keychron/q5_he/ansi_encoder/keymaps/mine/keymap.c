@@ -9,11 +9,8 @@ static bool rgb_adjusted_in_fn = false; // Tracks if an RGB key was pressed whil
 static bool is_fn_layer_active = false; // Tracks if we are currently in either Fn layer
 static bool is_gaming_layer_active = false; // Tracks if we are currently in GAMING layer
 #ifdef SIGNALRGB_ENABLE
-static bool signalrgb_enabled = true; // Tracks if SignalRGB is enabled
 static uint32_t last_srgb_activity = 0;
 static bool srgb_active_timeout = false;
-#else
-static bool signalrgb_enabled = false;
 #endif
 
 enum custom_keycodes {
@@ -179,7 +176,7 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     if (!was_fn_layer_active && is_fn_layer_active) {
         rgb_adjusted_in_fn = false;
 #ifdef SIGNALRGB_ENABLE
-        if (signalrgb_enabled && !srgb_active_timeout) {
+        if (!srgb_active_timeout) {
             signalrgb_mode_disable();
         }
 #endif
@@ -187,7 +184,7 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 
     if (was_fn_layer_active && !is_fn_layer_active) {
 #ifdef SIGNALRGB_ENABLE
-        if (signalrgb_enabled && !srgb_active_timeout) {
+        if (!srgb_active_timeout) {
             signalrgb_mode_enable();
         }
 #endif
@@ -233,7 +230,7 @@ void keyboard_post_init_user(void) {
 
 #ifdef SIGNALRGB_ENABLE
 void matrix_scan_user(void) {
-    if (signalrgb_enabled && !is_fn_layer_active && !srgb_active_timeout) {
+    if (!is_fn_layer_active && !srgb_active_timeout) {
         if (timer_elapsed32(last_srgb_activity) > 2000) {
             srgb_active_timeout = true;
             signalrgb_mode_disable();
@@ -270,14 +267,13 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
         case UG_SRGB:
             if (record->event.pressed) {
-                signalrgb_enabled = !signalrgb_enabled;
 #ifdef SIGNALRGB_ENABLE
-                if (signalrgb_enabled) {
+                if (signalrgb_is_enabled()) {
+                    signalrgb_mode_disable();
+                } else {
                     last_srgb_activity = timer_read32();
                     srgb_active_timeout = false;
                     signalrgb_mode_enable();
-                } else {
-                    signalrgb_mode_disable();
                 }
 #endif
             }
@@ -316,17 +312,15 @@ extern bool kc_raw_hid_rx(uint8_t src, uint8_t *data, uint8_t length);
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
 
 bool via_command_kb(uint8_t src, uint8_t *data, uint8_t length) {
-    if (signalrgb_enabled && !is_fn_layer_active) {
-        if (srgb_raw_hid_rx(data, length)) {
+    if (srgb_raw_hid_rx(data, length)) {
 #ifdef SIGNALRGB_ENABLE
-            last_srgb_activity = timer_read32();
-            if (srgb_active_timeout) {
-                srgb_active_timeout = false;
-                signalrgb_mode_enable();
-            }
-#endif
-            return true;
+        last_srgb_activity = timer_read32();
+        if (srgb_active_timeout) {
+            srgb_active_timeout = false;
+            signalrgb_mode_enable();
         }
+#endif
+        return true;
     }
     return kc_raw_hid_rx(src, data, length);
 }
