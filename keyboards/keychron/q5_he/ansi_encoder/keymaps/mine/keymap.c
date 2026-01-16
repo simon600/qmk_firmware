@@ -20,7 +20,9 @@ enum custom_keycodes {
     UG_SRGB = SAFE_RANGE,
     UG_ANIM1,
     UG_ANIM2,
-    UG_ANIM3
+    UG_ANIM3,
+    M_ENDW,
+    M_ENDM,
 };
 
 enum layers {
@@ -42,6 +44,8 @@ enum {
     TD_SLSH_BLSH = 0
 };
 
+#define GAMING_MODE_IDX 14
+
 tap_dance_action_t tap_dance_actions[] = {
     [TD_SLSH_BLSH] = ACTION_TAP_DANCE_DOUBLE(KC_SLSH, KC_BSLS)
 };
@@ -49,52 +53,52 @@ tap_dance_action_t tap_dance_actions[] = {
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [MAC_BASE] = LAYOUT_ansi_101(
-        KC_ESC,                          KC_BRID,  KC_BRIU,  KC_MCTRL, KC_LNPAD, UG_VALD,    UG_VALU,  _______,  _______,  KC_MPLY,  KC_MNXT,  KC_MPRV,  _______,            KC_DEL,   KC_F13,   KC_F14 ,  FN_HRD,   KC_MUTE,
-        KC_GRV,                KC_1,     KC_2,     KC_3,     KC_4,     KC_5,     KC_6,       KC_7,     KC_8,     KC_9,     KC_0,     KC_MINS,  KC_EQL,   KC_BSPC,            KC_PGUP,  KC_NUM,   KC_PSLS,  KC_PAST,  KC_PMNS,
-        KC_TAB,                KC_Q,     KC_W,     KC_E,     KC_R,     KC_T,     KC_Y,       KC_U,     KC_I,     KC_O,     KC_P,     KC_LBRC,  KC_RBRC,  KC_BSLS,            KC_PGDN,  KC_P7,    KC_P8,    KC_P9,
-        GUI_T(KC_ESC),         KC_A,     KC_S,     KC_D,     KC_F,     KC_G,     KC_H,       KC_J,     KC_K,     KC_L,     KC_SCLN,  KC_QUOT,            KC_ENT,             KC_HOME,  KC_P4,    KC_P5,    KC_P6,    KC_PPLS,
-        KC_LSFT,                         KC_Z,     KC_X,     KC_C,     KC_V,     KC_B,       KC_N,     KC_M,     KC_COMM,  KC_DOT,   KC_SLSH,            KC_RSFT,  KC_UP,              KC_P1,    KC_P2,    KC_P3,
-        KC_LCTL,               KC_LOPTN, KC_LCMMD,                               LT(MAC_FN, KC_SPC),                     KC_RCMMD, FN_MAC,   KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT,            KC_P0,    KC_PDOT,  KC_PENT),
+        KC_ESC,                          KC_BRID,    KC_BRIU,  KC_MCTRL,   KC_LNPAD, UG_VALD,    UG_VALU,  _______,  _______,  KC_MPLY,    KC_MNXT,  KC_MPRV,  _______,            KC_DEL,   KC_F13,   KC_F14 ,  FN_HRD,   KC_MUTE,
+        KC_GRV,                KC_1,     KC_2,       KC_3,     KC_4,       KC_5,     KC_6,       KC_7,     KC_8,     KC_9,     KC_0,       KC_MINS,  KC_EQL,   KC_BSPC,            KC_PGUP,  KC_NUM,   KC_PSLS,  KC_PAST,  KC_PMNS,
+        KC_TAB,                KC_Q,     KC_W,       KC_E,     KC_R,       KC_T,     KC_Y,       KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,            KC_PGDN,  KC_P7,    KC_P8,    KC_P9,
+        GUI_T(KC_ESC),         KC_A,     KC_S,       KC_D,     KC_F,       KC_G,     KC_H,       KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,             KC_HOME,  KC_P4,    KC_P5,    KC_P6,    KC_PPLS,
+        KC_LSFT,                         KC_Z,       KC_X,     KC_C,       KC_V,     KC_B,       KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,            KC_RSFT,  KC_UP,              KC_P1,    KC_P2,    KC_P3,
+        KC_LCTL,               KC_LOPTN, KC_LCMMD,                                   LT(MAC_FN, KC_SPC),                       KC_RCMMD,   FN_MAC,   KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT,            KC_P0,    KC_PDOT,  KC_PENT),
 
     [MAC_FN] = LAYOUT_ansi_101(
-        _______,                         KC_F1,    KC_F2,    KC_F3,    KC_F4,    KC_F5,      KC_F6,    KC_F7,    KC_F8,    KC_F9,    KC_F10,   KC_F11,   KC_F12,             _______,  _______,  _______,  _______,  _______,
-        _______,               _______,  _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
-        _______,               _______,  _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,
-        CW_TOGG,               _______,  _______,  _______,  _______,  _______,  KC_LEFT,    KC_DOWN,  KC_RGHT,  KC_UP,    _______,  _______,            _______,            KC_END,   _______,  _______,  _______,  _______,
-        _______,                         _______,  _______,  _______,  _______,  G(KC_LEFT), _______,  _______,  _______,  _______,  _______,            _______,  _______,            _______,  _______,  _______,
-        _______,               _______,  _______,                                _______,                                _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
+        _______,                         KC_F1,      KC_F2,    KC_F3,      KC_F4,    KC_F5,      KC_F6,    KC_F7,    KC_F8,    KC_F9,      KC_F10,   KC_F11,   KC_F12,             _______,  _______,  _______,  _______,  _______,
+        _______,               _______,  _______,    _______,  G(KC_RGHT), _______,  _______,    _______,  _______,  _______,  G(KC_LEFT), _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
+        _______,               _______,  G(KC_RGHT), M_ENDM,   _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,
+        CW_TOGG,               _______,  _______,    KC_DEL,   _______,    _______,  KC_LEFT,    KC_DOWN,  KC_RGHT,  KC_UP,    _______,    _______,            _______,            KC_END,   _______,  _______,  _______,  _______,
+        _______,                         _______,    _______,  _______,    _______,  G(KC_LEFT), _______,  _______,  _______,  _______,    _______,            _______,  _______,            _______,  _______,  _______,
+        _______,               _______,  _______,                                    _______,                                  _______,    _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
 
     [WIN_BASE] = LAYOUT_ansi_101(
-        LCSG_T(KC_ESC),                  KC_F1,    KC_F2,    KC_F3,    KC_F4,    KC_F5,      KC_F6,    KC_F7,    KC_F8,    KC_F9,    KC_F10,   KC_F11,   KC_F12,             KC_DEL,   _______,  _______,  FN_HRD,   KC_MUTE,
-        KC_GRV,                KC_1,     KC_2,     KC_3,     KC_4,     KC_5,     KC_6,       KC_7,     KC_8,     KC_9,     KC_0,     KC_MINS,  KC_EQL,   KC_BSPC,            KC_PGUP,  KC_NUM,   KC_PSLS,  KC_PAST,  KC_PMNS,
-        KC_TAB,                KC_Q,     KC_W,     KC_E,     KC_R,     KC_T,     KC_Y,       KC_U,     KC_I,     KC_O,     KC_P,     KC_LBRC,  KC_RBRC,  KC_BSLS,            KC_PGDN,  KC_P7,    KC_P8,    KC_P9,
-        LCTL_T(KC_ESC),        KC_A,     KC_S,     KC_D,     KC_F,     KC_G,     KC_H,       KC_J,     KC_K,     KC_L,     KC_SCLN,  KC_QUOT,            KC_ENT,             KC_HOME,  KC_P4,    KC_P5,    KC_P6,    KC_PPLS,
-        KC_LSFT,                         KC_Z,     KC_X,     KC_C,     KC_V,     KC_B,       KC_N,     KC_M,     KC_COMM,  KC_DOT,   KC_SLSH,            KC_RSFT,  KC_UP,              KC_P1,    KC_P2,    KC_P3,
-        KC_LCTL,               KC_LWIN,  KC_LALT,                                LT(WIN_FN, KC_SPC),                     KC_RALT,  FN_WIN,   KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT,            KC_P0,    KC_PDOT,  KC_PENT),
+        LCSG_T(KC_ESC),                  KC_F1,      KC_F2,    KC_F3,      KC_F4,    KC_F5,      KC_F6,    KC_F7,    KC_F8,    KC_F9,      KC_F10,   KC_F11,   KC_F12,             KC_DEL,   _______,  _______,  FN_HRD,   KC_MUTE,
+        KC_GRV,                KC_1,     KC_2,       KC_3,     KC_4,       KC_5,     KC_6,       KC_7,     KC_8,     KC_9,     KC_0,       KC_MINS,  KC_EQL,   KC_BSPC,            KC_PGUP,  KC_NUM,   KC_PSLS,  KC_PAST,  KC_PMNS,
+        KC_TAB,                KC_Q,     KC_W,       KC_E,     KC_R,       KC_T,     KC_Y,       KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,            KC_PGDN,  KC_P7,    KC_P8,    KC_P9,
+        LCTL_T(KC_ESC),        KC_A,     KC_S,       KC_D,     KC_F,       KC_G,     KC_H,       KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,             KC_HOME,  KC_P4,    KC_P5,    KC_P6,    KC_PPLS,
+        KC_LSFT,                         KC_Z,       KC_X,     KC_C,       KC_V,     KC_B,       KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,            KC_RSFT,  KC_UP,              KC_P1,    KC_P2,    KC_P3,
+        KC_LCTL,               KC_LWIN,  KC_LALT,                                    LT(WIN_FN, KC_SPC),                       KC_RALT,    FN_WIN,   KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT,            KC_P0,    KC_PDOT,  KC_PENT),
 
     [WIN_FN] = LAYOUT_ansi_101(
-        _______,                         KC_BRID,  KC_BRIU,  KC_TASK,  KC_FILE,  UG_VALD,    UG_VALU,  _______,  _______,  KC_MPLY,  KC_MNXT,  KC_MPRV,  _______,            _______,  TG_GMG,   _______,  _______,  _______,
-        _______,               _______,  _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,  _______,  _______,  _______,  KC_DEL,             _______,  _______,  _______,  _______,  _______,
-        _______,               _______,  _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,
-        CW_TOGG,               _______,  _______,  _______,  _______,  _______,  KC_LEFT,    KC_DOWN,  KC_RGHT,  KC_UP,    _______,  _______,            _______,            KC_END,   _______,  _______,  _______,  _______,
-        _______,                         _______,  _______,  _______,  _______,  C(KC_LEFT), _______,  _______,  _______,  _______,  _______,            _______,  _______,            _______,  _______,  _______,
-        _______,               _______,  _______,                                _______,                                _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
+        _______,                         KC_BRID,    KC_BRIU,  KC_TASK,    KC_FILE,  UG_VALD,    UG_VALU,  _______,  _______,  KC_MPLY,    KC_MNXT,  KC_MPRV,  _______,            _______,  TG_GMG,   _______,  _______,  _______,
+        _______,               _______,  _______,    _______,  KC_END,     _______,  _______,    _______,  _______,  _______,  KC_HOME,    _______,  _______,  KC_DEL,             _______,  _______,  _______,  _______,  _______,
+        _______,               _______,  C(KC_RGHT), M_ENDW,   _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,
+        CW_TOGG,               _______,  _______,    KC_DEL,   _______,    _______,  KC_LEFT,    KC_DOWN,  KC_RGHT,  KC_UP,    _______,    _______,            _______,            KC_END,   _______,  _______,  _______,  _______,
+        _______,                         _______,    _______,  _______,    _______,  C(KC_LEFT), _______,  _______,  _______,  _______,    _______,            _______,  _______,            _______,  _______,  _______,
+        _______,               _______,  _______,                                    _______,                                  _______,    _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
 
     [GAMING] = LAYOUT_ansi_101(
-        KC_ESC,                          _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
-        _______,               _______,  _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
-        _______,               _______,  _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,
-        _______,               _______,  _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,  _______,  _______,            _______,            _______,  _______,  _______,  _______,  _______,
-        _______,                         _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,  _______,  _______,            _______,  _______,            _______,  _______,  _______,
-        _______,               _______,  _______,                                KC_SPC,                                 _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
+        KC_ESC,                          _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
+        _______,               _______,  _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
+        _______,               _______,  _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,
+        _______,               _______,  _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,            _______,            _______,  _______,  _______,  _______,  _______,
+        _______,                         _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,            _______,  _______,            _______,  _______,  _______,
+        _______,               _______,  _______,                                    KC_SPC,                                   _______,    _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
 
     [HARDWARE] = LAYOUT_ansi_101(
-        _______,                         _______,  _______,  _______,  _______,  _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,  UG_TOGG,
-        _______,               BT_HST1,  BT_HST2,  BT_HST3,  P2P4G,    _______,  _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
-        UG_SRGB,               UG_NEXT,  UG_VALU,  UG_HUEU,  UG_SATU,  UG_SPDU,  _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,
-        _______,               UG_PREV,  UG_VALD,  UG_HUED,  UG_SATD,  UG_SPDD,  _______,    _______,  _______,  _______,  _______,  _______,            _______,            _______,  _______,  _______,  _______,  _______,
-        _______,                         UG_ANIM1, _______,  _______,  _______,  BAT_LVL,    _______,  _______,  _______,  _______,  _______,            _______,  _______,            _______,  _______,  _______,
-        _______,               _______,  _______,                                _______,                                _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
+        _______,                         _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  UG_TOGG,
+        _______,               BT_HST1,  BT_HST2,    BT_HST3,  P2P4G,      _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
+        UG_SRGB,               UG_NEXT,  UG_VALU,    UG_HUEU,  UG_SATU,    UG_SPDU,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,
+        _______,               UG_PREV,  UG_VALD,    UG_HUED,  UG_SATD,    UG_SPDD,  _______,    _______,  _______,  _______,  _______,    _______,            _______,            _______,  _______,  _______,  _______,  _______,
+        _______,                         UG_ANIM1,   _______,  _______,    _______,  BAT_LVL,    _______,  _______,  _______,  _______,    _______,            _______,  _______,            _______,  _______,  _______,
+        _______,               _______,  _______,                                    _______,                                  _______,    _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
 };
 
 // clang-format on
@@ -139,8 +143,20 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     bool gaming_active = (state & (1UL << GAMING));
 
     if (gaming_active) {
+        if (!is_gaming_layer_active) {
+            // Entered gaming layer
+            #ifdef SIGNALRGB_ENABLE
+            signalrgb_mask_key(GAMING_MODE_IDX);
+            #endif
+        }
         is_gaming_layer_active = true;
     } else {
+        if (is_gaming_layer_active) {
+            // Exited gaming layer
+            #ifdef SIGNALRGB_ENABLE
+            signalrgb_unmask_key(GAMING_MODE_IDX);
+            #endif
+        }
         is_gaming_layer_active = false;
     }
 
@@ -182,7 +198,7 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     if (is_gaming_layer_active) {
-        rgb_matrix_set_color(14, 255, 255, 255);
+        rgb_matrix_set_color(GAMING_MODE_IDX, 255, 255, 255);
     }
 
     if (is_fn_layer_active) {
@@ -195,6 +211,16 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         }
     }
     return true;
+}
+
+bool get_permissive_hold(uint16_t keycode, keyrecord_t *record) {
+    switch (keycode) {
+        case LCTL_T(KC_ESC):
+        case GUI_T(KC_ESC):
+            return true;
+        default:
+            return false;
+    }
 }
 
 void keyboard_post_init_user(void) {
@@ -265,6 +291,12 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             
         case UG_ANIM2:
         case UG_ANIM3:
+            return false;
+        case M_ENDW:
+            SEND_STRING(SS_LCTL(SS_TAP(X_RIGHT)) SS_TAP(X_LEFT));
+            return false;
+        case M_ENDM:
+            SEND_STRING(SS_LGUI(SS_TAP(X_RIGHT)) SS_TAP(X_LEFT));
             return false;
     }
     return true;
