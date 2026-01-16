@@ -11,6 +11,9 @@ static bool is_gaming_layer_active = false; // Tracks if we are currently in GAM
 #ifdef SIGNALRGB_ENABLE
 static uint32_t last_srgb_activity = 0;
 static bool srgb_active_timeout = false;
+static bool srgb_was_enabled_before_fn = false;
+static bool keyboard_srgb_enabled = true;  // Track if keyboard wants SignalRGB enabled
+static bool process_srgb = true;
 #endif
 
 enum custom_keycodes {
@@ -112,25 +115,37 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
 
 static bool mod_led_mask[256];      // Lookup table for fast O(1) checks in render loop
 
-void scan_mod_layer_keys(uint8_t layer) {
+void update_mod_led_mask(uint8_t fn_layer) {
     // Clear mask
     for (uint16_t i = 0; i < 256; i++) {
         mod_led_mask[i] = false;
     }
 
-    for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
-        for (uint8_t col = 0; col < MATRIX_COLS; col++) {
-            // Check keys specifically on the target layer
-            uint16_t keycode = keymap_key_to_keycode(layer, (keypos_t){col, row});
+    // If FN layer is active, mask keys with non-transparent keycodes
+    if (is_fn_layer_active) {
+        for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+            for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+                uint16_t keycode = keymap_key_to_keycode(fn_layer, (keypos_t){col, row});
 
-            if (keycode != KC_TRNS) {
-                uint8_t led_index = g_led_config.matrix_co[row][col];
-                if (led_index != NO_LED) {
-                    mod_led_mask[led_index] = true;
+                if (keycode != KC_TRNS) {
+                    uint8_t led_index = g_led_config.matrix_co[row][col];
+                    if (led_index != NO_LED) {
+                        mod_led_mask[led_index] = true;
+                    }
                 }
             }
         }
     }
+
+    // If gaming layer is active, mask the gaming mode indicator
+    if (is_gaming_layer_active) {
+        mod_led_mask[GAMING_MODE_IDX] = true;
+    }
+
+    // Sync with SignalRGB
+#ifdef SIGNALRGB_ENABLE
+    signalrgb_sync_mask(mod_led_mask);
+#endif
 }
 
 layer_state_t layer_state_set_user(layer_state_t state) {
@@ -139,55 +154,40 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     bool hrdw_fn_active = (state & (1UL << HARDWARE));
     bool gaming_active = (state & (1UL << GAMING));
 
-    if (gaming_active) {
-        if (!is_gaming_layer_active) {
-            // Entered gaming layer
-            #ifdef SIGNALRGB_ENABLE
-            signalrgb_mask_key(GAMING_MODE_IDX);
-            #endif
-        }
-        is_gaming_layer_active = true;
-    } else {
-        if (is_gaming_layer_active) {
-            // Exited gaming layer
-            #ifdef SIGNALRGB_ENABLE
-            signalrgb_unmask_key(GAMING_MODE_IDX);
-            #endif
-        }
-        is_gaming_layer_active = false;
-    }
+    bool was_gaming_active = is_gaming_layer_active;
+    is_gaming_layer_active = gaming_active;
 
     bool was_fn_layer_active = is_fn_layer_active;
+    uint8_t fn_layer = 0;
 
-    if (win_fn_active && !is_fn_layer_active) {
-        scan_mod_layer_keys(WIN_FN);
+    if (win_fn_active) {
         is_fn_layer_active = true;
-    } else if (mac_fn_active && !is_fn_layer_active) {
-        scan_mod_layer_keys(MAC_FN);
+        fn_layer = WIN_FN;
+    } else if (mac_fn_active) {
         is_fn_layer_active = true;
-    } else if (hrdw_fn_active && !is_fn_layer_active) {
-        scan_mod_layer_keys(HARDWARE);
+        fn_layer = MAC_FN;
+    } else if (hrdw_fn_active) {
         is_fn_layer_active = true;
+        fn_layer = HARDWARE;
     } else {
         is_fn_layer_active = false;
         rgb_adjusted_in_fn = false;
     }
 
+    // Entering FN layer
     if (!was_fn_layer_active && is_fn_layer_active) {
         rgb_adjusted_in_fn = false;
-#ifdef SIGNALRGB_ENABLE
-        if (!srgb_active_timeout) {
-            signalrgb_mode_disable();
-        }
-#endif
     }
 
+    // Exiting FN layer
     if (was_fn_layer_active && !is_fn_layer_active) {
-#ifdef SIGNALRGB_ENABLE
-        if (!srgb_active_timeout) {
-            signalrgb_mode_enable();
-        }
-#endif
+        // State restoration handled by SignalRGB module via HID
+    }
+
+    // Update mask whenever gaming or FN layer state changes
+    if (was_gaming_active != is_gaming_layer_active || 
+        was_fn_layer_active != is_fn_layer_active) {
+        update_mod_led_mask(fn_layer);
     }
 
     return state;
@@ -202,7 +202,7 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         for (uint8_t i = led_min; i < led_max; i++) {
             if (mod_led_mask[i]) {
                 rgb_matrix_set_color(i, 255, 255, 255);
-            } else if (!rgb_adjusted_in_fn) {
+            } else if (!rgb_adjusted_in_fn && !process_srgb) {
                  rgb_matrix_set_color(i, 0, 0, 0);
             }
         }
@@ -230,11 +230,25 @@ void keyboard_post_init_user(void) {
 
 #ifdef SIGNALRGB_ENABLE
 void matrix_scan_user(void) {
-    if (!is_fn_layer_active && !srgb_active_timeout) {
+    if (!is_fn_layer_active && !srgb_active_timeout && process_srgb) {
         if (timer_elapsed32(last_srgb_activity) > 2000) {
             srgb_active_timeout = true;
-            signalrgb_mode_disable();
+            signalrgb_mode_disable();  // Revert to built-in animation
         }
+    }
+    bool was_srgb_enabled = process_srgb;
+    if (is_fn_layer_active && !rgb_adjusted_in_fn) {
+        process_srgb = false;
+    } else {
+        process_srgb = keyboard_srgb_enabled;
+    }
+    if (was_srgb_enabled && !process_srgb) {
+        signalrgb_mode_disable();
+    } else if (!was_srgb_enabled && process_srgb && !srgb_active_timeout) {
+        signalrgb_mode_enable();
+    }
+    if (rgb_matrix_get_mode() != RGB_MATRIX_CUSTOM_SIGNALRGB && !srgb_active_timeout) {
+        process_srgb = false;
     }
 }
 #endif
@@ -259,7 +273,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             case UG_ANIM1:
             case UG_ANIM2:
             case UG_ANIM3:
-                rgb_adjusted_in_fn = true;
+                if (!rgb_adjusted_in_fn) {
+                    rgb_adjusted_in_fn = true;
+                }
                 break;
         }
     }
@@ -268,12 +284,13 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case UG_SRGB:
             if (record->event.pressed) {
 #ifdef SIGNALRGB_ENABLE
-                if (signalrgb_is_enabled()) {
-                    signalrgb_mode_disable();
-                } else {
+                keyboard_srgb_enabled = !keyboard_srgb_enabled;
+                
+                if (keyboard_srgb_enabled) {
+                    // When enabling, reset timeout tracking
                     last_srgb_activity = timer_read32();
                     srgb_active_timeout = false;
-                    signalrgb_mode_enable();
+                    srgb_was_enabled_before_fn = true;
                 }
 #endif
             }
@@ -312,16 +329,23 @@ extern bool kc_raw_hid_rx(uint8_t src, uint8_t *data, uint8_t length);
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
 
 bool via_command_kb(uint8_t src, uint8_t *data, uint8_t length) {
-    if (srgb_raw_hid_rx(data, length)) {
+    // Don't process SignalRGB HID messages if keyboard has disabled SignalRGB
+    // This prevents SignalRGB app from re-enabling when user toggled it off
+    if (!process_srgb) {
+        return kc_raw_hid_rx(src, data, length);
+    }
+    
 #ifdef SIGNALRGB_ENABLE
+    if (srgb_raw_hid_rx(data, length)) {
         last_srgb_activity = timer_read32();
+        // Clear timeout flag when receiving data
         if (srgb_active_timeout) {
             srgb_active_timeout = false;
             signalrgb_mode_enable();
         }
-#endif
         return true;
     }
+#endif
     return kc_raw_hid_rx(src, data, length);
 }
 #endif
