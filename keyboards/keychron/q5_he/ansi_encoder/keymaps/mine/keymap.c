@@ -4,6 +4,23 @@
 #   include "signalrgb.h"
 #endif
 
+// --- STATE STORAGE ---
+static bool rgb_adjusted_in_fn = false; // Tracks if an RGB key was pressed while in Fn layer
+static bool is_fn_layer_active = false; // Tracks if we are currently in either Fn layer
+static bool is_gaming_layer_active = false; // Tracks if we are currently in GAMING layer
+#ifdef SIGNALRGB_ENABLE
+static bool signalrgb_enabled = true; // Tracks if SignalRGB is enabled
+#else
+static bool signalrgb_enabled = false;
+#endif
+
+enum custom_keycodes {
+    UG_SRGB = SAFE_RANGE,
+    UG_ANIM1,
+    UG_ANIM2,
+    UG_ANIM3
+};
+
 enum layers {
     MAC_BASE,
     MAC_FN,
@@ -19,12 +36,6 @@ enum layers {
 #define TG_GMG TG(GAMING)
 
 // --- CONFIGURATION ---
-
-// --- STATE STORAGE ---
-static bool mod_led_mask[256];      // Lookup table for fast O(1) checks in render loop
-static bool is_fn_layer_active = false; // Tracks if we are currently in either Fn layer
-static bool is_gaming_layer_active = false; // Tracks if we are currently in GAMING layer
-static bool rgb_adjusted_in_fn = false; // Tracks if an RGB key was pressed while in Fn layer
 enum {
     TD_SLSH_BLSH = 0
 };
@@ -78,9 +89,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [HARDWARE] = LAYOUT_ansi_101(
         _______,                         _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,  UG_TOGG,
         _______,               BT_HST1,  BT_HST2,  BT_HST3,  P2P4G,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
-        UG_TOGG,               UG_NEXT,  UG_VALU,  UG_HUEU,  UG_SATU,  UG_SPDU,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,
+        UG_SRGB,               UG_NEXT,  UG_VALU,  UG_HUEU,  UG_SATU,  UG_SPDU,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______,  _______,
         _______,               UG_PREV,  UG_VALD,  UG_HUED,  UG_SATD,  UG_SPDD,  _______,  _______,  _______,  _______,  _______,  _______,            _______,            _______,  _______,  _______,  _______,  _______,
-        _______,                         KC_F24,   _______,  _______,  _______,  BAT_LVL,  _______,  _______,  _______,  _______,  _______,            _______,  _______,            _______,  _______,  _______,
+        _______,                         UG_ANIM1, _______,  _______,  _______,  BAT_LVL,  _______,  _______,  _______,  _______,  _______,            _______,  _______,            _______,  _______,  _______,
         _______,               _______,  _______,                                _______,                                _______,  _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
 };
 
@@ -88,11 +99,15 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 #if defined(ENCODER_MAP_ENABLE)
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
     [MAC_BASE] = {ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
+    [MAC_FN]   = {ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
     [WIN_BASE] = {ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
+    [WIN_FN]   = {ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
     [GAMING]   = {ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
     [HARDWARE] = {ENCODER_CCW_CW(UG_VALD, UG_VALU)},
 };
 #endif // ENCODER_MAP_ENABLE
+
+static bool mod_led_mask[256];      // Lookup table for fast O(1) checks in render loop
 
 void scan_mod_layer_keys(uint8_t layer) {
     // Clear mask
@@ -127,21 +142,37 @@ layer_state_t layer_state_set_user(layer_state_t state) {
         is_gaming_layer_active = false;
     }
 
+    bool was_fn_layer_active = is_fn_layer_active;
+
     if (win_fn_active && !is_fn_layer_active) {
         scan_mod_layer_keys(WIN_FN);
-        rgb_adjusted_in_fn = false;
         is_fn_layer_active = true;
     } else if (mac_fn_active && !is_fn_layer_active) {
         scan_mod_layer_keys(MAC_FN);
-        rgb_adjusted_in_fn = false;
         is_fn_layer_active = true;
     } else if (hrdw_fn_active && !is_fn_layer_active) {
         scan_mod_layer_keys(HARDWARE);
-        rgb_adjusted_in_fn = false;
         is_fn_layer_active = true;
     } else {
         is_fn_layer_active = false;
         rgb_adjusted_in_fn = false;
+    }
+
+    if (!was_fn_layer_active && is_fn_layer_active) {
+        rgb_adjusted_in_fn = false;
+#ifdef SIGNALRGB_ENABLE
+        if (signalrgb_enabled) {
+            signalrgb_mode_disable();
+        }
+#endif
+    }
+
+    if (was_fn_layer_active && !is_fn_layer_active) {
+#ifdef SIGNALRGB_ENABLE
+        if (signalrgb_enabled) {
+            signalrgb_mode_enable();
+        }
+#endif
     }
 
     return state;
@@ -192,12 +223,28 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     }
 
     switch (keycode) {
-        case KC_F24: // This is our hijacked "Magic" key
+        case UG_SRGB:
             if (record->event.pressed) {
-                // Force the RGB Matrix to Solid Color mode
-                rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
+                signalrgb_enabled = !signalrgb_enabled;
+#ifdef SIGNALRGB_ENABLE
+                if (signalrgb_enabled) {
+                    signalrgb_mode_enable();
+                } else {
+                    signalrgb_mode_disable();
+                }
+#endif
             }
-            return false; // Don't send F24 to the computer
+            return false;
+        
+        case UG_ANIM1:
+            if (record->event.pressed) {
+                 rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
+            }
+            return false;
+            
+        case UG_ANIM2:
+        case UG_ANIM3:
+            return false;
     }
     return true;
 }
@@ -207,8 +254,10 @@ extern bool kc_raw_hid_rx(uint8_t src, uint8_t *data, uint8_t length);
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
 
 bool via_command_kb(uint8_t src, uint8_t *data, uint8_t length) {
-    if (srgb_raw_hid_rx(data, length)) {
-        return true;
+    if (signalrgb_enabled && !is_fn_layer_active) {
+        if (srgb_raw_hid_rx(data, length)) {
+            return true;
+        }
     }
     return kc_raw_hid_rx(src, data, length);
 }
