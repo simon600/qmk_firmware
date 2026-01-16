@@ -230,21 +230,22 @@ void keyboard_post_init_user(void) {
 
 #ifdef SIGNALRGB_ENABLE
 void matrix_scan_user(void) {
-    if (!is_fn_layer_active && !srgb_active_timeout && process_srgb) {
+    bool was_srgb_active = process_srgb && !srgb_active_timeout;
+
+    if (!srgb_active_timeout && process_srgb) {
         if (timer_elapsed32(last_srgb_activity) > 2000) {
             srgb_active_timeout = true;
-            signalrgb_mode_disable();  // Revert to built-in animation
         }
     }
-    bool was_srgb_enabled = process_srgb;
     if (is_fn_layer_active && !rgb_adjusted_in_fn) {
         process_srgb = false;
     } else {
         process_srgb = keyboard_srgb_enabled;
     }
-    if (was_srgb_enabled && !process_srgb) {
+    bool is_srgb_active = process_srgb && !srgb_active_timeout;
+    if (was_srgb_active && !is_srgb_active) {
         signalrgb_mode_disable();
-    } else if (!was_srgb_enabled && process_srgb && !srgb_active_timeout) {
+    } else if (!was_srgb_active && is_srgb_active) {
         signalrgb_mode_enable();
     }
     if (rgb_matrix_get_mode() != RGB_MATRIX_CUSTOM_SIGNALRGB && !srgb_active_timeout) {
@@ -341,7 +342,6 @@ bool via_command_kb(uint8_t src, uint8_t *data, uint8_t length) {
         // Clear timeout flag when receiving data
         if (srgb_active_timeout) {
             srgb_active_timeout = false;
-            signalrgb_mode_enable();
         }
         return true;
     }
