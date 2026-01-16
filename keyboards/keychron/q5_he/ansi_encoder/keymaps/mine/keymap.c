@@ -14,6 +14,7 @@ static bool srgb_active_timeout = false;
 static bool srgb_was_enabled_before_fn = false;
 static bool keyboard_srgb_enabled = true;  // Track if keyboard wants SignalRGB enabled
 static bool process_srgb = true;
+static bool was_srgb_active = true;
 #endif
 
 enum custom_keycodes {
@@ -230,8 +231,6 @@ void keyboard_post_init_user(void) {
 
 #ifdef SIGNALRGB_ENABLE
 void matrix_scan_user(void) {
-    bool was_srgb_active = process_srgb && !srgb_active_timeout;
-
     if (!srgb_active_timeout && process_srgb) {
         if (timer_elapsed32(last_srgb_activity) > 2000) {
             srgb_active_timeout = true;
@@ -251,6 +250,7 @@ void matrix_scan_user(void) {
     if (rgb_matrix_get_mode() != RGB_MATRIX_CUSTOM_SIGNALRGB && !srgb_active_timeout) {
         process_srgb = false;
     }
+    was_srgb_active = process_srgb && !srgb_active_timeout;
 }
 #endif
 
