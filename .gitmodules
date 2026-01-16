@@ -27,4 +27,4 @@
 	branch = release/v8.2
 [submodule "modules/signalrgb"]
 	path = modules/signalrgb
-	url = https://github.com/SRGBmods/QMK_Community_Module
+	url = https://github.com/simon600/QMK_Community_Module.git
