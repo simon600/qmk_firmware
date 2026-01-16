@@ -1,5 +1,8 @@
 #include QMK_KEYBOARD_H
 #include "keychron_common.h"
+#ifdef SIGNALRGB_ENABLE
+#   include "signalrgb.h"
+#endif
 
 enum layers {
     MAC_BASE,
@@ -22,7 +25,6 @@ static bool mod_led_mask[256];      // Lookup table for fast O(1) checks in rend
 static bool is_fn_layer_active = false; // Tracks if we are currently in either Fn layer
 static bool is_gaming_layer_active = false; // Tracks if we are currently in GAMING layer
 static bool rgb_adjusted_in_fn = false; // Tracks if an RGB key was pressed while in Fn layer
-
 enum {
     TD_SLSH_BLSH = 0
 };
@@ -200,3 +202,14 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     return true;
 }
 
+#if defined(VIA_ENABLE) && defined(SIGNALRGB_ENABLE)
+extern bool kc_raw_hid_rx(uint8_t src, uint8_t *data, uint8_t length);
+extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
+
+bool via_command_kb(uint8_t src, uint8_t *data, uint8_t length) {
+    if (srgb_raw_hid_rx(data, length)) {
+        return true;
+    }
+    return kc_raw_hid_rx(src, data, length);
+}
+#endif
