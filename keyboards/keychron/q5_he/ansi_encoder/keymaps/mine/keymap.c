@@ -371,15 +371,10 @@ void leader_end_user(void) {
 extern bool kc_raw_hid_rx(uint8_t src, uint8_t *data, uint8_t length);
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
 
-bool via_command_kb(uint8_t src, uint8_t *data, uint8_t length) {
+bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
     // Don't process SignalRGB HID messages if keyboard has disabled SignalRGB
     // This prevents SignalRGB app from re-enabling when user toggled it off
-    if (!process_srgb) {
-        return kc_raw_hid_rx(src, data, length);
-    }
-    
-#ifdef SIGNALRGB_ENABLE
-    if (srgb_raw_hid_rx(data, length)) {
+    if (process_srgb && srgb_raw_hid_rx(data, length)) {
         last_srgb_activity = timer_read32();
         // Clear timeout flag when receiving data
         if (srgb_active_timeout) {
@@ -387,7 +382,6 @@ bool via_command_kb(uint8_t src, uint8_t *data, uint8_t length) {
         }
         return true;
     }
-#endif
-    return kc_raw_hid_rx(src, data, length);
+    return false;
 }
 #endif
