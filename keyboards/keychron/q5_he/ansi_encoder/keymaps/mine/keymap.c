@@ -125,6 +125,20 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
 
 static bool mod_led_mask[256];      // Lookup table for fast O(1) checks in render loop
 
+#ifdef SIGNALRGB_ENABLE
+bool should_process_srgb(void) {
+    if (is_fn_layer_active && !rgb_adjusted_in_fn) {
+        return false;
+    }
+    if (srgb.active_timeout) {
+        return false;
+    }
+    return srgb.keyboard_enabled;
+}
+#else
+bool should_process_srgb(void) { return false; }
+#endif
+
 void update_mod_led_mask(uint8_t fn_layer) {
     // Clear mask
     for (uint16_t i = 0; i < 256; i++) {
@@ -207,7 +221,7 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         for (uint8_t i = led_min; i < led_max; i++) {
             if (mod_led_mask[i]) {
                 rgb_matrix_set_color(i, 255, 255, 255);
-            } else if (!rgb_adjusted_in_fn && !srgb.process) {
+            } else if (!rgb_adjusted_in_fn && !should_process_srgb()) {
                  rgb_matrix_set_color(i, 0, 0, 0);
             }
         }
@@ -236,34 +250,21 @@ void keyboard_post_init_user(void) {
 #ifdef SIGNALRGB_ENABLE
 void matrix_scan_user(void) {
     // Timeout check
-    if (!srgb.active_timeout && srgb.process) {
+    bool should_process = should_process_srgb();
+    if (!srgb.active_timeout) {
         if (timer_elapsed32(srgb.last_activity) > 2000) {
             srgb.active_timeout = true;
         }
     }
 
-    // Determine if we should process SignalRGB
-    if (is_fn_layer_active && !rgb_adjusted_in_fn) {
-        srgb.process = false;
-    } else {
-        srgb.process = srgb.keyboard_enabled;
-    }
-
-    bool is_srgb_active = srgb.process && !srgb.active_timeout;
-    
     // State transitions
-    if (srgb.was_active && !is_srgb_active) {
+    if (srgb.was_active && !should_process) {
         signalrgb_mode_disable();
-    } else if (!srgb.was_active && is_srgb_active) {
+    } else if (!srgb.was_active && should_process) {
         signalrgb_mode_enable();
     }
     
-    // Force process off if not in valid mode
-    if (rgb_matrix_get_mode() != RGB_MATRIX_CUSTOM_SIGNALRGB && !srgb.active_timeout) {
-        srgb.process = false;
-    }
-    
-    srgb.was_active = srgb.process && !srgb.active_timeout;
+    srgb.was_active = should_process;
 }
 #endif
 
@@ -406,7 +407,7 @@ bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
 
     // Don't process SignalRGB HID messages if keyboard has disabled SignalRGB
     // This prevents SignalRGB app from re-enabling when user toggled it off
-    if (srgb.process && srgb_raw_hid_rx(data, length)) {
+    if (should_process_srgb() && srgb_raw_hid_rx(data, length)) {
         return true;
     }
     return false;
