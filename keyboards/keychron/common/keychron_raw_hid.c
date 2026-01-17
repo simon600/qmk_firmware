@@ -271,21 +271,17 @@ bool kc_raw_hid_rx(uint8_t src, uint8_t *data, uint8_t length) {
 }
 
 #    if defined(VIA_ENABLE)
-#        ifndef SIGNALRGB_ENABLE
 bool via_command_kb(uint8_t src, uint8_t *data, uint8_t length) {
     return kc_raw_hid_rx(src, data, length);
 }
-#        endif
 
 /* Override default via_raw_hid_send implement */
 void via_raw_hid_send(uint8_t src, uint8_t *data, uint8_t len) {
     kc_raw_hid_send(src, data, len);
 }
 #    else
-#        ifndef SIGNALRGB_ENABLE
 void raw_hid_receive(uint8_t src, uint8_t *data, uint8_t length) {
     kc_raw_hid_rx(src, data, length);
 }
-#        endif
 #    endif
 #endif

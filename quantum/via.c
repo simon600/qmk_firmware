@@ -283,6 +283,13 @@ __attribute__((weak)) void via_custom_value_command(uint8_t *data, uint8_t lengt
     via_custom_value_command_kb(data, length);
 }
 
+// User level code can override this, but shouldn't need to.
+// Controlling custom features should be done by overriding
+// via_custom_value_command_user() instead.
+__attribute__((weak)) bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
+    return false;
+}
+
 // Keyboard level code can override this, but shouldn't need to.
 // Controlling custom features should be done by overriding
 // via_custom_value_command_kb() instead.
@@ -297,6 +304,12 @@ __attribute__((weak)) void via_raw_hid_send(uint8_t src, uint8_t *data, uint8_t 
 void raw_hid_receive(uint8_t src, uint8_t *data, uint8_t length) {
     uint8_t *command_id   = &(data[0]);
     uint8_t *command_data = &(data[1]);
+
+    // If via_command_user() returns true, the command was fully
+    // handled, including calling raw_hid_send()
+    if (via_command_user(src, data, length)) {
+        return;
+    }
 
     // If via_command_kb() returns true, the command was fully
     // handled, including calling raw_hid_send()
