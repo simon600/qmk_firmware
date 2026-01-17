@@ -307,11 +307,53 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case UG_ANIM3:
             return false;
         case M_ENDW:
-            SEND_STRING(SS_LCTL(SS_TAP(X_RIGHT)) SS_TAP(X_LEFT));
+            if (record->event.pressed) {
+                tap_code16(C(KC_RGHT));
+                tap_code16(KC_RGHT);
+            }
             return false;
         case M_ENDM:
-            SEND_STRING(SS_LGUI(SS_TAP(X_RIGHT)) SS_TAP(X_LEFT));
+            if (record->event.pressed) {
+                tap_code16(G(KC_RGHT));
+                tap_code16(KC_LEFT);
+            }
             return false;
+#ifdef SIGNALRGB_ENABLE
+        case UG_VALU:
+            if (keyboard_srgb_enabled && !srgb_active_timeout) {
+                if (record->event.pressed) {
+                    tap_code16(C(A(G(KC_EQL))));
+                }
+                return false;
+            }
+            break;
+        case UG_VALD:
+            if (keyboard_srgb_enabled && !srgb_active_timeout) {
+                if (record->event.pressed) {
+                    tap_code16(C(A(G(KC_MINS))));
+                }
+                return false;
+            }
+            break;
+        case UG_NEXT:
+            if (keyboard_srgb_enabled && !srgb_active_timeout) {
+                if (record->event.pressed) {
+                    tap_code16(C(A(G(KC_Q))));
+                }
+                return false;
+            }
+            break;
+        case UG_PREV:
+            if (keyboard_srgb_enabled && !srgb_active_timeout) {
+                if (record->event.pressed) {
+                    tap_code16(C(A(G(KC_A))));
+                }
+                return false;
+            }
+            break;
+
+
+#endif
     }
     return true;
 }
