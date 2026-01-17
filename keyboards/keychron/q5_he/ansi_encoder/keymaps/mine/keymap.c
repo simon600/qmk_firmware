@@ -384,14 +384,29 @@ extern bool kc_raw_hid_rx(uint8_t src, uint8_t *data, uint8_t length);
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
 
 bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
+    switch (data[0]) {
+        case GET_QMK_VERSION:
+        case GET_PROTOCOL_VERSION:
+        case GET_UNIQUE_IDENTIFIER:
+        case STREAM_RGB_DATA:
+        case SET_SIGNALRGB_MODE_ENABLE:
+        case SET_SIGNALRGB_MODE_DISABLE:
+        case GET_TOTAL_LEDS:
+        case GET_FIRMWARE_TYPE:
+            break;
+        default:
+            return false;
+    }
+
+    srgb.last_activity = timer_read32();
+    // Clear timeout flag when receiving data
+    if (srgb.active_timeout) {
+        srgb.active_timeout = false;
+    }
+
     // Don't process SignalRGB HID messages if keyboard has disabled SignalRGB
     // This prevents SignalRGB app from re-enabling when user toggled it off
     if (srgb.process && srgb_raw_hid_rx(data, length)) {
-        srgb.last_activity = timer_read32();
-        // Clear timeout flag when receiving data
-        if (srgb.active_timeout) {
-            srgb.active_timeout = false;
-        }
         return true;
     }
     return false;
