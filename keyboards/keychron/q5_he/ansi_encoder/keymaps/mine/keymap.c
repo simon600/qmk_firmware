@@ -13,7 +13,6 @@ typedef struct {
     uint32_t last_activity;
     bool active_timeout;
     bool keyboard_enabled;
-    bool process;
     bool was_active;
 } srgb_state_t;
 
@@ -21,7 +20,6 @@ static srgb_state_t srgb = {
     .last_activity = 0,
     .active_timeout = false,
     .keyboard_enabled = true,
-    .process = true,
     .was_active = true
 };
 #endif
