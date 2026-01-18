@@ -53,5 +53,28 @@
             "fileMatch": ["keymap.json"],
             "url": "./data/schemas/keymap.jsonschema"
         }
-    ]
+    ],
+    // Enable Format on Save for this workspace only
+    "editor.formatOnSave": true,
+
+    // Disable C++ extension formatting to use Xaver Clang-Format
+    "C_Cpp.formatting": "disabled",
+    "[c]": {
+        "editor.defaultFormatter": "xaver.clang-format"
+    },
+    "[cpp]": {
+        "editor.defaultFormatter": "xaver.clang-format"
+    },
+
+    // Configure Xaver Clang-Format
+    "clang-format.executable": "/usr/bin/clang-format",
+    "clang-format.style": "file",
+
+    // Optional: Useful for QMK development to avoid "missing header" squiggles
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.default.browse.path": ["${workspaceFolder}/**"],
+
+    // Clean up trailing whitespace and ensure a newline at end of file
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true
 }
