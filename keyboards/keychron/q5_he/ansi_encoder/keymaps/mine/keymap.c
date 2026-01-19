@@ -4,40 +4,13 @@
 #    include "signalrgb.h"
 #endif
 
+// --- CONSTANTS & DEFINITIONS ---
+
 #define GAMING_IND_IDX 0
 #define SRGB_IND_IDX 1
-
-// --- STATE STORAGE ---
-static bool rgb_adjusted_in_fn = false; // Tracks if an RGB key was pressed while in Fn layer
-static bool is_fn_layer_active = false; // Tracks if we are currently in either Fn layer
-
-#ifdef SIGNALRGB_ENABLE
-typedef struct {
-    uint32_t last_activity;
-    bool     active_timeout;
-    bool     keyboard_enabled;
-    bool     was_active;
-} srgb_state_t;
-
-static srgb_state_t srgb = {.last_activity = 0, .active_timeout = false, .keyboard_enabled = true, .was_active = false};
-#endif
-
-typedef struct {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-} color_t;
-typedef struct {
-    uint8_t   index;
-    bool      active;
-    rgb_led_t color;
-} indicator_state_t;
-
 #define INDICATOR_COUNT 2
-static indicator_state_t indicators[INDICATOR_COUNT] = {
-    {.index = 14, .active = false, .color = {255, 0, 0}},
-    {.index = 36, .active = false, .color = {255, 255, 255}},
-};
+
+#define TIMEOUT_MS 300000 // 5 minutes
 
 enum custom_keycodes {
     UG_SRGB = SAFE_RANGE,
@@ -62,9 +35,60 @@ enum layers {
 #define FN_HRD MO(HARDWARE)
 #define TG_GMG TG(GAMING)
 
-// --- CONFIGURATION ---
-enum { TD_SLSH_BLSH = 0 };
+// --- DATA STRUCTURES ---
 
+typedef struct {
+    uint8_t r, g, b;
+} color_t;
+
+typedef struct {
+    uint8_t   index;
+    bool      active;
+    color_t   color;
+} indicator_t;
+
+typedef struct {
+    // User Intent / Persistent Settings
+    bool user_srgb_enabled;      // Toggled by UG_SRGB
+
+    // System Counters
+    uint32_t last_activity_time; // For timeout tracking
+
+    // Derived/Transient State
+    bool timeout_active;         // True if inactivity timer expired
+    bool is_fn_layer_active;     // True if any FN layer is on
+    uint8_t current_fn_layer;    // The actual layer index (or 0)
+    bool rgb_adjusted_in_fn;     // True if user messed with RGB settings inside FN layer
+
+    // Active State (What is currently happening)
+    bool srgb_active;            // Is SignalRGB currently driving the board?
+
+    // Indicators
+    indicator_t indicators[INDICATOR_COUNT];
+
+} keyboard_state_t;
+
+// --- GLOBAL STATE ---
+
+static keyboard_state_t state = {
+    .user_srgb_enabled = true,
+    .last_activity_time = 0,
+    .timeout_active = false,
+    .is_fn_layer_active = false,
+    .current_fn_layer = 0,
+    .rgb_adjusted_in_fn = false,
+    .srgb_active = false,
+    .indicators = {
+        {.index = 14, .active = false, .color = {255, 0, 0}},   // GAMING
+        {.index = 36, .active = false, .color = {255, 255, 255}} // SRGB
+    }
+};
+
+static bool mod_led_mask[256]; // 0 = SignalRGB controlled, 1 = QMK controlled (masked)
+
+// --- KEYMAP ---
+
+enum { TD_SLSH_BLSH = 0 };
 tap_dance_action_t tap_dance_actions[] = {[TD_SLSH_BLSH] = ACTION_TAP_DANCE_DOUBLE(KC_SLSH, KC_BSLS)};
 
 // clang-format off
@@ -127,121 +151,220 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
     [GAMING]    = {ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
     [HARDWARE]  = {ENCODER_CCW_CW(UG_VALD, UG_VALU)},
 };
-#endif // ENCODER_MAP_ENABLE
+#endif
+
 // clang-format on
 
-static bool mod_led_mask[256]; // Lookup table for fast O(1) checks in render loop
+// --- LOGIC ---
 
-#ifdef SIGNALRGB_ENABLE
-bool should_process_srgb(void) {
-    if (is_fn_layer_active && !rgb_adjusted_in_fn) {
-        return false;
-    }
-    if (srgb.active_timeout) {
-        return false;
-    }
-    return srgb.keyboard_enabled;
-}
-#else
-bool should_process_srgb(void) {
-    return false;
-}
-#endif
-
-void update_mod_led_mask_idx(uint8_t idx, bool mask) {
-    mod_led_mask[idx] = mask;
-    // Sync with SignalRGB
-#ifdef SIGNALRGB_ENABLE
-    signalrgb_sync_mask(mod_led_mask);
-#endif
-}
-void update_mod_led_mask(uint8_t fn_layer) {
+// Updates mod_led_mask based on current state (doesn't sync it)
+void calculate_mask(bool *mask_out) {
     // Clear mask
     for (uint16_t i = 0; i < 256; i++) {
-        mod_led_mask[i] = false;
+        mask_out[i] = false;
     }
 
-    // If FN layer is active, mask keys with non-transparent keycodes
-    if (is_fn_layer_active) {
+    // 1. If FN layer active, mask keys that are NOT transparent on that layer
+    if (state.is_fn_layer_active && state.current_fn_layer != 0) {
         for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
             for (uint8_t col = 0; col < MATRIX_COLS; col++) {
-                uint16_t keycode = keymap_key_to_keycode(fn_layer, (keypos_t){col, row});
+                uint16_t keycode = keymap_key_to_keycode(state.current_fn_layer, (keypos_t){col, row});
 
                 if (keycode != KC_TRNS) {
                     uint8_t led_index = g_led_config.matrix_co[row][col];
                     if (led_index != NO_LED) {
-                        mod_led_mask[led_index] = true;
+                        mask_out[led_index] = true;
                     }
                 }
             }
         }
     }
 
+    // 2. Indicators always masked when active
     for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
-        if (indicators[i].active) {
-            uint8_t led_index = indicators[i].index;
+        if (state.indicators[i].active) {
+            uint8_t led_index = state.indicators[i].index;
             if (led_index != NO_LED) {
-                mod_led_mask[led_index] = true;
+                mask_out[led_index] = true;
             }
         }
     }
-
-    // Sync with SignalRGB
-#ifdef SIGNALRGB_ENABLE
-    signalrgb_sync_mask(mod_led_mask);
-#endif
 }
 
-layer_state_t layer_state_set_user(layer_state_t state) {
-    bool win_fn_active  = layer_state_cmp(state, WIN_FN);
-    bool mac_fn_active  = layer_state_cmp(state, MAC_FN);
-    bool hrdw_fn_active = layer_state_cmp(state, HARDWARE);
-    bool gaming_active  = layer_state_cmp(state, GAMING);
+// Determines if SignalRGB SHOULD be processing right now
+bool should_process_srgb(void) {
+#ifndef SIGNALRGB_ENABLE
+    return false;
+#endif
+    // If not enabled by user, off.
+    if (!state.user_srgb_enabled) return false;
 
-    bool was_fn_layer_active = is_fn_layer_active;
+    // If timeout, off.
+    if (state.timeout_active) return false;
 
-    // Determine current FN layer and active state
+    // If in FN layer and user has NOT adjusted RGB manually inside that layer:
+    // Original logic: "if (is_fn_layer_active && !rgb_adjusted_in_fn) return false;"
+    // This implies SignalRGB is disabled during FN layer usage to show internal lighting,
+    // UNLESS the user touched RGB controls, in which case we assume they want to see what they did?
+    // Or maybe it meant: "If I'm in FN layer, I want my key colors (masked). But if I explicitly change RGB, maybe I want to see it?"
+    // Let's stick to the original logic:
+    if (state.is_fn_layer_active && !state.rgb_adjusted_in_fn) {
+        return false;
+    }
+
+    return true;
+}
+
+// Main State Update Loop (called from matrix_scan_user)
+void update_rgb_state_atomic(void) {
+    // 1. Update Timeout State
+    if (!state.timeout_active && timer_elapsed32(state.last_activity_time) > TIMEOUT_MS) {
+        state.timeout_active = true;
+    }
+
+    // 2. Update Indicators Logic
+    // SRGB Indicator: Active if User Enabled it, but it's currently suspended (e.g. by timeout or layer)
+    // "active_timeout" in original code seemed to trigger the indicator logic:
+    // "indicators[SRGB_IND_IDX].active = true" was in the "else" block of "force initial state".
+
+    // Let's replicate the "SRGB Indicator is ON when SRGB is TIMED OUT or SUSPENDED but Enabled" logic.
+    bool target_srgb_active = should_process_srgb();
+
+    // If User Enabled SRGB, but it is NOT processing (e.g. Timeout), show indicator?
+    // Original: "indicators[SRGB_IND_IDX].active = srgb.keyboard_enabled;" when "srgb.was_active && !should_process" (Disable transition)
+    // This implies if we disable SignalRGB (due to timeout/fn), we turn ON the indicator if the keyboard is still "enabled" logically.
+    // If the user explicitly disabled it (UG_SRGB), indicator is OFF.
+
+    if (state.user_srgb_enabled && !target_srgb_active) {
+        state.indicators[SRGB_IND_IDX].active = true;
+    } else {
+        state.indicators[SRGB_IND_IDX].active = false;
+    }
+
+    // Gaming Indicator is updated in layer_state_set_user usually, but we can double check here or just trust the state.
+    // (It's already in state).
+
+    // 3. Calculate Target Mask
+    bool new_mask[256];
+    calculate_mask(new_mask);
+
+    // 4. Check for Mask Differences
+    bool mask_changed = false;
+    for (int i = 0; i < 256; i++) {
+        if (mod_led_mask[i] != new_mask[i]) {
+            mask_changed = true;
+            break;
+        }
+    }
+
+    // 5. Apply Changes Atomically (Visual consistency)
+
+    // CASE A: SignalRGB State Change (Enable -> Disable)
+    if (state.srgb_active && !target_srgb_active) {
+#ifdef SIGNALRGB_ENABLE
+        signalrgb_mode_disable();
+#endif
+        state.srgb_active = false;
+
+        // Update mask locally (for QMK internal rendering if needed)
+        for(int i=0; i<256; i++) mod_led_mask[i] = new_mask[i];
+
+        // If we disabled SignalRGB, we might want to sync mask? Not strictly necessary if disabled,
+        // but good for consistency if it re-enables.
+        // But more importantly, QMK RGB Matrix needs to know which keys to light up (masked keys).
+    }
+    // CASE B: SignalRGB State Change (Disable -> Enable)
+    else if (!state.srgb_active && target_srgb_active) {
+        // Update mask FIRST so we don't flash unmasked keys
+        if (mask_changed) {
+            for(int i=0; i<256; i++) mod_led_mask[i] = new_mask[i];
+#ifdef SIGNALRGB_ENABLE
+            signalrgb_sync_mask(mod_led_mask);
+#endif
+            mask_changed = false; // Handled
+        } else {
+            // Even if not changed, ensure it's synced before enabling?
+            // Usually not needed if we track it well, but let's be safe?
+            // No, only sync if changed or init.
+        }
+
+#ifdef SIGNALRGB_ENABLE
+        signalrgb_mode_enable();
+#endif
+        state.srgb_active = true;
+    }
+    // CASE C: No State Change, but Mask Change
+    else if (mask_changed) {
+        for(int i=0; i<256; i++) mod_led_mask[i] = new_mask[i];
+#ifdef SIGNALRGB_ENABLE
+        // Only sync to host if SignalRGB is active or we want host to know about it for later
+        signalrgb_sync_mask(mod_led_mask);
+#endif
+    }
+}
+
+// --- HOOKS ---
+
+layer_state_t layer_state_set_user(layer_state_t state_arg) {
+    bool win_fn_active  = layer_state_cmp(state_arg, WIN_FN);
+    bool mac_fn_active  = layer_state_cmp(state_arg, MAC_FN);
+    bool hrdw_fn_active = layer_state_cmp(state_arg, HARDWARE);
+    bool gaming_active  = layer_state_cmp(state_arg, GAMING);
+
+    bool was_fn_layer_active = state.is_fn_layer_active;
+
+    // Determine current FN layer
     uint8_t fn_layer = 0;
-    if (win_fn_active)
-        fn_layer = WIN_FN;
-    else if (mac_fn_active)
-        fn_layer = MAC_FN;
-    else if (hrdw_fn_active)
-        fn_layer = HARDWARE;
+    if (win_fn_active) fn_layer = WIN_FN;
+    else if (mac_fn_active) fn_layer = MAC_FN;
+    else if (hrdw_fn_active) fn_layer = HARDWARE;
 
-    is_fn_layer_active = (fn_layer != 0);
+    // Update State
+    state.current_fn_layer = fn_layer;
+    state.is_fn_layer_active = (fn_layer != 0);
 
     // Reset RGB adjustment flag when entering FN layer
-    if (!was_fn_layer_active && is_fn_layer_active) {
-        rgb_adjusted_in_fn = false;
+    if (!was_fn_layer_active && state.is_fn_layer_active) {
+        state.rgb_adjusted_in_fn = false;
     }
-    // Note: State restoration on exit is handled by SignalRGB module via HID or timeouts
 
-    if (gaming_active) {
-        indicators[GAMING_IND_IDX].active = true;
-    } else {
-        indicators[GAMING_IND_IDX].active = false;
-    }
-    // Update mask whenever gaming or FN layer state changes
-    update_mod_led_mask(fn_layer);
+    // Update Gaming Indicator
+    state.indicators[GAMING_IND_IDX].active = gaming_active;
 
-    return state;
+    // Reset activity timer on layer change (user interaction)
+    state.last_activity_time = timer_read32();
+    if (state.timeout_active) state.timeout_active = false;
+
+    // Note: We do NOT call update_mod_led_mask here.
+    // We let matrix_scan_user handle the atomic update of mask + srgb state.
+
+    return state_arg;
 }
 
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
-    if (is_fn_layer_active) {
+    // If SignalRGB is active, QMK typically doesn't render unless we mask.
+    // If SignalRGB is disabled, QMK renders everything.
+
+    // Render Masked Keys (Functional Layer Highlighting)
+    if (state.is_fn_layer_active) {
         for (uint8_t i = led_min; i < led_max; i++) {
             if (mod_led_mask[i]) {
                 rgb_matrix_set_color(i, 255, 255, 255);
-            } else if (!rgb_adjusted_in_fn && !should_process_srgb()) {
+            } else if (!state.rgb_adjusted_in_fn && !state.srgb_active) {
+                // If we are in FN layer, and SignalRGB is OFF (expected), and we haven't adjusted RGB:
+                // Turn off unmasked keys? (Black out non-functional keys)
                 rgb_matrix_set_color(i, 0, 0, 0);
             }
         }
     }
 
+    // Render Indicators
     for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
-        if (indicators[i].active) {
-            rgb_matrix_set_color(indicators[i].index, indicators[i].color.r, indicators[i].color.g, indicators[i].color.b);
+        if (state.indicators[i].active) {
+            rgb_matrix_set_color(state.indicators[i].index,
+                                 state.indicators[i].color.r,
+                                 state.indicators[i].color.g,
+                                 state.indicators[i].color.b);
         }
     }
 
@@ -261,76 +384,43 @@ bool get_permissive_hold(uint16_t keycode, keyrecord_t *record) {
 void keyboard_post_init_user(void) {
     rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
     rgb_matrix_sethsv(156, 191, 255);
-#ifdef SIGNALRGB_ENABLE
-    srgb.last_activity    = timer_read32();
-    srgb.keyboard_enabled = true; // Ensure defaults
-    srgb.active_timeout   = false;
 
-    // Force initial state synchronization
-    if (should_process_srgb()) {
-        signalrgb_mode_enable();
-        indicators[SRGB_IND_IDX].active = false;
-        update_mod_led_mask_idx(SRGB_IND_IDX, false);
-        srgb.was_active = true;
-    } else {
-        // Start in timeout mode logic if needed, though unlikely given last_activity reset
-        indicators[SRGB_IND_IDX].active = true;
-        update_mod_led_mask_idx(SRGB_IND_IDX, true);
-        srgb.was_active = false;
-    }
+    state.last_activity_time = timer_read32();
+    state.user_srgb_enabled = true;
+    state.timeout_active = false;
+
+    // Force initial update logic
+#ifdef SIGNALRGB_ENABLE
+    signalrgb_mode_enable(); // Default to enabled?
+    state.srgb_active = true;
 #endif
 }
 
-#ifdef SIGNALRGB_ENABLE
 void matrix_scan_user(void) {
-    // Timeout check
-    bool should_process = should_process_srgb();
-    if (!srgb.active_timeout) {
-        if (timer_elapsed32(srgb.last_activity) > 300) {
-            srgb.active_timeout = true;
+    update_rgb_state_atomic();
+}
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    // Reset Activity Timer on any keypress
+    if (record->event.pressed) {
+        state.last_activity_time = timer_read32();
+        if (state.timeout_active) {
+            state.timeout_active = false;
+            // update_rgb_state_atomic will handle re-enabling in the next scan
         }
     }
 
-    // State transitions
-    if (srgb.was_active && !should_process) {
-        signalrgb_mode_disable();
-        indicators[SRGB_IND_IDX].active = srgb.keyboard_enabled;
-        update_mod_led_mask_idx(SRGB_IND_IDX, srgb.keyboard_enabled);
-    } else if (!srgb.was_active && should_process) {
-        signalrgb_mode_enable();
-        indicators[SRGB_IND_IDX].active = false;
-        update_mod_led_mask_idx(SRGB_IND_IDX, false);
-    }
-
-    srgb.was_active = should_process;
-}
-#endif
-
-bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (!process_caps_word(keycode, record)) {
         return false;
     }
 
-    if (is_fn_layer_active && record->event.pressed) {
+    // Track RGB Adjustments in FN layer
+    if (state.is_fn_layer_active && record->event.pressed) {
         switch (keycode) {
-            case UG_TOGG:
-            case UG_NEXT:
-            case UG_PREV:
-            case UG_VALU:
-            case UG_VALD:
-            case UG_HUEU:
-            case UG_HUED:
-            case UG_SATU:
-            case UG_SATD:
-            case UG_SPDU:
-            case UG_SPDD:
-            case UG_SRGB:
-            case UG_ANIM1:
-            case UG_ANIM2:
-            case UG_ANIM3:
-                if (!rgb_adjusted_in_fn) {
-                    rgb_adjusted_in_fn = true;
-                }
+            case UG_TOGG: case UG_NEXT: case UG_PREV: case UG_VALU: case UG_VALD:
+            case UG_HUEU: case UG_HUED: case UG_SATU: case UG_SATD: case UG_SPDU:
+            case UG_SPDD: case UG_SRGB: case UG_ANIM1: case UG_ANIM2: case UG_ANIM3:
+                state.rgb_adjusted_in_fn = true;
                 break;
         }
     }
@@ -338,18 +428,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
         case UG_SRGB:
             if (record->event.pressed) {
-#ifdef SIGNALRGB_ENABLE
-                srgb.keyboard_enabled = !srgb.keyboard_enabled;
-
-                if (srgb.keyboard_enabled) {
-                    // When enabling, reset timeout tracking
-                    srgb.last_activity  = timer_read32();
-                    srgb.active_timeout = false;
-                } else {
-                    indicators[SRGB_IND_IDX].active = false;
-                    update_mod_led_mask_idx(SRGB_IND_IDX, false);
-                }
-#endif
+                state.user_srgb_enabled = !state.user_srgb_enabled;
+                // update_rgb_state_atomic will handle the transition
             }
             return false;
 
@@ -362,6 +442,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case UG_ANIM2:
         case UG_ANIM3:
             return false;
+
         case M_ENDW:
             if (record->event.pressed) {
                 tap_code16(C(KC_RGHT));
@@ -374,40 +455,33 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 tap_code16(KC_LEFT);
             }
             return false;
+
 #ifdef SIGNALRGB_ENABLE
+        // SignalRGB Passthrough keys
         case UG_VALU:
-            if (should_process_srgb() && !srgb.active_timeout) {
-                if (record->event.pressed) {
-                    tap_code16(C(A(G(KC_EQL))));
-                }
+            if (state.srgb_active && !state.timeout_active) {
+                if (record->event.pressed) tap_code16(C(A(G(KC_EQL))));
                 return false;
             }
             break;
         case UG_VALD:
-            if (should_process_srgb() && !srgb.active_timeout) {
-                if (record->event.pressed) {
-                    tap_code16(C(A(G(KC_MINS))));
-                }
+            if (state.srgb_active && !state.timeout_active) {
+                if (record->event.pressed) tap_code16(C(A(G(KC_MINS))));
                 return false;
             }
             break;
         case UG_NEXT:
-            if (should_process_srgb() && !srgb.active_timeout) {
-                if (record->event.pressed) {
-                    tap_code16(C(A(G(KC_Q))));
-                }
+            if (state.srgb_active && !state.timeout_active) {
+                if (record->event.pressed) tap_code16(C(A(G(KC_Q))));
                 return false;
             }
             break;
         case UG_PREV:
-            if (should_process_srgb() && !srgb.active_timeout) {
-                if (record->event.pressed) {
-                    tap_code16(C(A(G(KC_A))));
-                }
+            if (state.srgb_active && !state.timeout_active) {
+                if (record->event.pressed) tap_code16(C(A(G(KC_A))));
                 return false;
             }
             break;
-
 #endif
     }
     return true;
@@ -426,6 +500,7 @@ extern bool kc_raw_hid_rx(uint8_t src, uint8_t *data, uint8_t length);
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
 
 bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
+    // Intercept SignalRGB commands to update activity/timeout state
     switch (data[0]) {
         case GET_QMK_VERSION:
         case GET_PROTOCOL_VERSION:
@@ -435,20 +510,15 @@ bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
         case SET_SIGNALRGB_MODE_DISABLE:
         case GET_TOTAL_LEDS:
         case GET_FIRMWARE_TYPE:
-            break;
-        default:
-            return false;
+             // Reset timeout if SignalRGB is talking to us
+             state.last_activity_time = timer_read32();
+             if (state.timeout_active) state.timeout_active = false;
+             break;
     }
 
-    srgb.last_activity = timer_read32();
-    // Clear timeout flag when receiving data
-    if (srgb.active_timeout) {
-        srgb.active_timeout = false;
-    }
-
-    // Don't process SignalRGB HID messages if keyboard has disabled SignalRGB
-    // This prevents SignalRGB app from re-enabling when user toggled it off
-    if (should_process_srgb() && srgb_raw_hid_rx(data, length)) {
+    // Only allow SignalRGB raw HID if we actually want it enabled.
+    // If user disabled it (UG_SRGB), block messages so app doesn't force re-enable.
+    if (state.user_srgb_enabled && srgb_raw_hid_rx(data, length)) {
         return true;
     }
     return false;
