@@ -7,6 +7,9 @@
 #define GAMING_IND_IDX 0
 #define SRGB_IND_IDX 1
 
+// Inactivity timeout: 5 minutes in milliseconds
+#define INACTIVITY_TIMEOUT_MS 300000
+
 // --- STATE STORAGE ---
 // Clean separation: Immediate control flags vs. Deferred rendering actions
 
@@ -14,6 +17,11 @@
 static bool    rgb_adjusted_in_fn  = false; // Whether RGB was adjusted while in FN layer
 static uint8_t active_fn_layer     = 0;     // Which FN layer is active (0 if none)
 static bool    gaming_layer_active = false; // Whether gaming layer is active
+
+// Inactivity dimming state (5-minute timeout)
+static uint32_t last_activity_time = 0;     // Last keyboard activity timestamp
+static bool     is_dimmed          = false; // Whether brightness has been dimmed
+static uint8_t  saved_brightness   = 0;     // Original brightness before dimming
 
 #ifdef SIGNALRGB_ENABLE
 // SignalRGB control state - immediate flags that affect SignalRGB calculation
@@ -169,6 +177,16 @@ static void commit_rendering_update(bool need_mask_recalc) {
 }
 #endif
 
+// Register activity and restore brightness if dimmed
+static void register_activity(void) {
+    last_activity_time = timer_read32();
+
+    if (is_dimmed) {
+        rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), saved_brightness);
+        is_dimmed = false;
+    }
+}
+
 void update_mod_led_mask(uint8_t fn_layer) {
     // Clear mask
     for (uint16_t i = 0; i < 256; i++) {
@@ -281,8 +299,10 @@ bool get_permissive_hold(uint16_t keycode, keyrecord_t *record) {
 }
 
 void keyboard_post_init_user(void) {
-    rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
-    rgb_matrix_sethsv_noeeprom(156, 191, 255);
+    // Initialize inactivity dimming
+    last_activity_time = timer_read32();
+    is_dimmed          = false;
+    saved_brightness   = 0;
 
 #ifdef SIGNALRGB_ENABLE
     // Initialize SignalRGB control state
@@ -304,6 +324,17 @@ void keyboard_post_init_user(void) {
 }
 
 void matrix_scan_user(void) {
+    // Check for inactivity timeout
+    uint32_t elapsed = timer_elapsed32(last_activity_time);
+    if (!is_dimmed && elapsed > INACTIVITY_TIMEOUT_MS) {
+        // Save current brightness and dim to minimum (val=1, just above off)
+        saved_brightness = rgb_matrix_get_val();
+        if (saved_brightness > 1) { // Only dim if brightness is above minimum
+            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 1);
+            is_dimmed = true;
+        }
+    }
+
 #ifdef SIGNALRGB_ENABLE
     // Check for SignalRGB timeout (immediate state update)
     if (!srgb_state.timed_out && timer_elapsed32(srgb_state.last_activity) > 300) {
@@ -351,6 +382,11 @@ void matrix_scan_user(void) {
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (!process_caps_word(keycode, record)) {
         return false;
+    }
+
+    // Track activity for inactivity dimming
+    if (record->event.pressed) {
+        register_activity();
     }
 
     // Track RGB adjustments in FN layer (IMMEDIATE state update)
@@ -499,6 +535,9 @@ bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
         default:
             return false;
     }
+
+    // Track USB activity for inactivity dimming
+    register_activity();
 
     srgb_state.last_activity = timer_read32();
 
