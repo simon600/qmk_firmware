@@ -109,7 +109,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______,               _______,  _______,                                    _______,                                  _______,    _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
 
     [WIN_BASE] = LAYOUT_ansi_101(
-        LCSG_T(KC_ESC),                  KC_F1,      KC_F2,    KC_F3,      KC_F4,    KC_F5,      KC_F6,    KC_F7,    KC_F8,    KC_F9,      KC_F10,   KC_F11,   KC_F12,             KC_DEL,   _______,  _______,  FN_HRD,   KC_MUTE,
+        LCSG_T(KC_ESC),                  KC_F1,      KC_F2,    KC_F3,      KC_F4,    KC_F5,      KC_F6,    KC_F7,    KC_F8,    KC_F9,      KC_F10,   KC_F11,   KC_F12,             KC_DEL,   TG_GMG,   _______,  FN_HRD,   KC_MUTE,
         KC_GRV,                KC_1,     KC_2,       KC_3,     KC_4,       KC_5,     KC_6,       KC_7,     KC_8,     KC_9,     KC_0,       KC_MINS,  KC_EQL,   KC_BSPC,            KC_PGUP,  KC_NUM,   KC_PSLS,  KC_PAST,  KC_PMNS,
         KC_TAB,                KC_Q,     KC_W,       KC_E,     KC_R,       KC_T,     KC_Y,       KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,            KC_PGDN,  KC_P7,    KC_P8,    KC_P9,
         LCTL_T(KC_ESC),        KC_A,     KC_S,       KC_D,     KC_F,       KC_G,     KC_H,       KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,             KC_HOME,  KC_P4,    KC_P5,    KC_P6,    KC_PPLS,
@@ -117,7 +117,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_LCTL,               KC_LWIN,  KC_LALT,                                    LT(WIN_FN, KC_SPC),                       KC_RALT,    FN_WIN,   KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT,            KC_P0,    KC_PDOT,  KC_PENT),
 
     [WIN_FN] = LAYOUT_ansi_101(
-        _______,                         KC_BRID,    KC_BRIU,  KC_TASK,    KC_FILE,  UG_VALD,    UG_VALU,  _______,  _______,  KC_MPLY,    KC_MNXT,  KC_MPRV,  _______,            _______,  TG_GMG,   _______,  _______,  _______,
+        _______,                         KC_BRID,    KC_BRIU,  KC_TASK,    KC_FILE,  UG_VALD,    UG_VALU,  _______,  _______,  KC_MPLY,    KC_MNXT,  KC_MPRV,  _______,            _______,  _______,   _______,  _______,  _______,
         _______,               _______,  _______,    _______,  KC_END,     _______,  _______,    _______,  _______,  _______,  KC_HOME,    _______,  _______,  KC_DEL,             _______,  _______,  _______,  _______,  _______,
         _______,               _______,  C(KC_RGHT), M_ENDW,   _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,
         CW_TOGG,               _______,  _______,    KC_DEL,   _______,    _______,  KC_LEFT,    KC_DOWN,  KC_UP,    KC_RGHT,  _______,    _______,            _______,            KC_END,   _______,  _______,  _______,  _______,
@@ -257,8 +257,8 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     commit_rendering_update(true);
 #else
     // Without SignalRGB, just update the mask directly
-    update_mod_led_mask(fn_layer);
     indicators[GAMING_IND_IDX].active = gaming_layer_active;
+    update_mod_led_mask(fn_layer);
 #endif
 
     return state;
@@ -330,7 +330,7 @@ void matrix_scan_user(void) {
         // Save current brightness and dim to minimum (val=1, just above off)
         saved_brightness = rgb_matrix_get_val();
         if (saved_brightness > 1) { // Only dim if brightness is above minimum
-            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 1);
+            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 16);
             is_dimmed = true;
         }
     }
@@ -353,13 +353,13 @@ void matrix_scan_user(void) {
             }
         }
 
-        // 2. Recalculate LED mask if needed
+        // 2. Update indicators based on IMMEDIATE state (always fresh)
+        indicators[GAMING_IND_IDX].active = gaming_layer_active;
+
+        // 3. Recalculate LED mask if needed
         if (pending.recalc_mask) {
             update_mod_led_mask(active_fn_layer);
         }
-
-        // 3. Update indicators based on IMMEDIATE state (always fresh)
-        indicators[GAMING_IND_IDX].active = gaming_layer_active;
 
         bool should_process             = calculate_signalrgb_should_process();
         indicators[SRGB_IND_IDX].active = srgb_state.user_enabled && !should_process;
@@ -439,7 +439,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
         case UG_ANIM1:
             if (record->event.pressed) {
-                rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
+                rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
+                rgb_matrix_sethsv(156, 191, 255);
             }
             return false;
 
