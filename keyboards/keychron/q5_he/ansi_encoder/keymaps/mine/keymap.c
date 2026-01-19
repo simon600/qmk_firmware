@@ -342,7 +342,6 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             case UG_ANIM2:
             case UG_ANIM3:
                 if (!rgb_adjusted_in_fn) {
-                    // Mark that RGB was adjusted in FN layer (IMMEDIATE)
                     rgb_adjusted_in_fn = true;
                 }
                 break;
