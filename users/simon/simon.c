@@ -122,8 +122,6 @@ void keyboard_post_init_shared(void) {
     signalrgb_mode_enable();
 #endif
 
-    rgb_matrix_enable();
-
 #ifdef GAMING_IND_IDX
     // Initialize gaming indicator
     indicators[GAMING_IND_IDX].active = false;
