@@ -9,3 +9,7 @@
 
 // Use SignalRGB buffer mode for better control of LED application order
 #define SIGNALRGB_USE_BUFFER
+
+// Indicator configuration
+#define GAMING_IND_IDX 0
+#define SRGB_IND_IDX 1
