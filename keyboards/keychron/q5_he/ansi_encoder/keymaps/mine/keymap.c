@@ -87,20 +87,6 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
 
 // --- KEYBOARD-SPECIFIC INDICATOR CONFIGURATION ---
 
-void init_shared_indicators(void) {
-    indicator_state_t *indicators = get_indicators();
-
-    // Gaming mode indicator (red) at LED index 14
-    indicators[GAMING_IND_IDX].index  = 14;
-    indicators[GAMING_IND_IDX].active = false;
-    indicators[GAMING_IND_IDX].color  = (rgb_led_t){255, 0, 0};
-
-    // SignalRGB status indicator (white) at LED index 36
-    indicators[SRGB_IND_IDX].index  = 36;
-    indicators[SRGB_IND_IDX].active = false;
-    indicators[SRGB_IND_IDX].color  = (rgb_led_t){255, 255, 255};
-}
-
 // --- QMK CALLBACK WRAPPERS ---
 
 void keyboard_post_init_user(void) {
@@ -133,9 +119,9 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     // Update shared state
     set_active_fn_layer(fn_layer);
 
-    // Update gaming indicator
-    indicator_state_t *indicators     = get_indicators();
-    indicators[GAMING_IND_IDX].active = gaming_active;
+    // Update gaming indicator using compile-time registry
+    indicator_t *indicators             = get_indicators();
+    indicators[INDICATOR_GAMING].active = gaming_active;
 
     return layer_state_set_shared(state);
 }

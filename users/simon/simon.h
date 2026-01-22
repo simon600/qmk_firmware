@@ -17,18 +17,32 @@ enum custom_keycodes_shared {
 };
 
 // --- CONSTANTS ---
-// Indicator indices - keyboards can optionally define these in config.h
-// If defined, the corresponding indicator will be used/managed by userspace
-// Example:
-//   #define GAMING_IND_IDX 0  // Enable gaming indicator at index 0
-//   #define SRGB_IND_IDX 1    // Enable SignalRGB indicator at index 1
-
-#ifndef INDICATOR_COUNT
-#    define INDICATOR_COUNT 2 // Default: 2 indicators (gaming, signalrgb)
-#endif
-
 // Inactivity timeout: 5 minutes in milliseconds
 #define INACTIVITY_TIMEOUT_MS 300000
+
+// --- INDICATOR REGISTRY (X-Macro System) ---
+
+// Helper macro for conditional SignalRGB indicator
+#if defined(SIGNALRGB_ENABLE)
+#    define IF_SIGNALRGB_ENABLED(x) x
+#else
+#    define IF_SIGNALRGB_ENABLED(x)
+#endif
+
+// Universal indicators available in userspace
+#define SHARED_INDICATOR_IDS \
+    X(INDICATOR_MACRO_REC)   \
+    IF_SIGNALRGB_ENABLED(X(INDICATOR_SIGNALRGB))
+
+// Allow keyboards to extend with their own indicators
+#ifndef KEYBOARD_INDICATOR_IDS
+#    define KEYBOARD_INDICATOR_IDS
+#endif
+
+// Generate enum from indicator IDs
+#define X(id) id,
+enum indicator_ids { SHARED_INDICATOR_IDS KEYBOARD_INDICATOR_IDS INDICATOR_COUNT };
+#undef X
 
 // --- TYPE DEFINITIONS ---
 typedef struct {
@@ -38,10 +52,10 @@ typedef struct {
 } color_t;
 
 typedef struct {
-    uint8_t   index;
-    bool      active;
-    rgb_led_t color;
-} indicator_state_t;
+    uint8_t   led_index; // Physical LED index (255 = disabled/unmapped)
+    bool      active;    // Whether indicator is currently active
+    rgb_led_t color;     // RGB color value
+} indicator_t;
 
 #ifdef SIGNALRGB_ENABLE
 typedef struct {
@@ -50,6 +64,9 @@ typedef struct {
     bool     user_enabled;  // Whether user has enabled SignalRGB via toggle
 } signalrgb_state_t;
 #endif
+
+// --- GLOBAL INDICATOR REGISTRY ---
+extern indicator_t indicator_library[INDICATOR_COUNT];
 
 // --- FUNCTION DECLARATIONS ---
 
@@ -80,9 +97,6 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length);
 #endif
 
 // State access (for keymap-specific logic if needed)
-indicator_state_t *get_indicators(void);
-uint8_t            get_active_fn_layer(void);
-void               set_active_fn_layer(uint8_t layer);
-
-// Indicator initialization (weak function - override in keymap to define specific indicators)
-void init_shared_indicators(void);
+indicator_t *get_indicators(void);
+uint8_t      get_active_fn_layer(void);
+void         set_active_fn_layer(uint8_t layer);

@@ -10,6 +10,18 @@
 // Use SignalRGB buffer mode for better control of LED application order
 #define SIGNALRGB_USE_BUFFER
 
-// Indicator configuration
-#define GAMING_IND_IDX 0
-#define SRGB_IND_IDX 1
+// --- X-Macro Indicator Registry Configuration ---
+
+// Define keyboard-specific indicator IDs (extends SHARED_INDICATOR_IDS)
+#define KEYBOARD_INDICATOR_IDS X(INDICATOR_GAMING)
+
+// Helper macro for conditional SignalRGB indicator mapping
+#if defined(SIGNALRGB_ENABLE)
+#    define M_SIGNALRGB_INDICATOR(idx) [INDICATOR_SIGNALRGB] = {.led_index = idx, .color = {255, 255, 255}},
+#else
+#    define M_SIGNALRGB_INDICATOR(idx)
+#endif
+
+// Map indicator IDs to physical LED indices and colors
+// Format: [ID] = {.led_index = INDEX, .color = {R, G, B}}
+#define KEYBOARD_LED_MAP [INDICATOR_MACRO_REC] = {.led_index = 255}, [INDICATOR_GAMING] = {.led_index = 14, .color = {255, 0, 0}}, M_SIGNALRGB_INDICATOR(36)
