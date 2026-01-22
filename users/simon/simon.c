@@ -19,8 +19,14 @@ static uint8_t  saved_brightness   = 0;     // Original brightness before dimmin
 static signalrgb_state_t srgb_state = {0};
 #endif
 
-// Indicator states - initialized by keyboard via init_shared_indicators()
-static indicator_state_t indicators[INDICATOR_COUNT];
+// --- COMPILE-TIME INDICATOR REGISTRY ---
+// Initialize with defaults: all LED indices to 255 (disabled), inactive, black color
+// Keyboard-specific mappings are applied via KEYBOARD_LED_MAP macro
+indicator_t indicator_library[INDICATOR_COUNT] = {[0 ... INDICATOR_COUNT - 1] = {.led_index = 255, .active = false, .color = {0, 0, 0}},
+#ifdef KEYBOARD_LED_MAP
+                                                  KEYBOARD_LED_MAP
+#endif
+};
 
 // LED mask for FN layer rendering
 static bool mod_led_mask[RGB_MATRIX_LED_COUNT];
@@ -78,23 +84,12 @@ static void update_mod_led_mask(uint8_t fn_layer) {
 // --- PUBLIC API FUNCTIONS ---
 
 // State access functions
-indicator_state_t *get_indicators(void) {
-    return indicators;
+indicator_t *get_indicators(void) {
+    return indicator_library;
 }
 
 uint8_t get_active_fn_layer(void) {
     return active_fn_layer;
-}
-
-// Weak function that keyboards should override to initialize their specific indicators
-// Example: indicators[0] = {.index = 14, .active = false, .color = {255, 0, 0}};
-__attribute__((weak)) void init_shared_indicators(void) {
-    // Default: no indicators configured
-    for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
-        indicators[i].index  = NO_LED;
-        indicators[i].active = false;
-        indicators[i].color  = (rgb_led_t){0, 0, 0};
-    }
 }
 
 // --- QMK CALLBACK IMPLEMENTATIONS ---
@@ -103,9 +98,6 @@ void keyboard_post_init_shared(void) {
     // Explicitly initialize state variables (BSS may not be zeroed properly)
     active_fn_layer    = 0;
     rgb_adjusted_in_fn = false;
-
-    // Initialize indicators (keyboard-specific via weak function)
-    init_shared_indicators();
 
     // Initialize inactivity dimming
     last_activity_time = timer_read32();
@@ -116,15 +108,10 @@ void keyboard_post_init_shared(void) {
     // Initialize SignalRGB control state
     srgb_state.user_enabled  = true;
     srgb_state.timed_out     = false;
-    srgb_state.last_activity = 0; // Will be set by first HID packet
+    srgb_state.last_activity = timer_read32();
 
     // Enable SignalRGB mode (required for RGB matrix to render SignalRGB colors)
     signalrgb_mode_enable();
-#endif
-
-#ifdef GAMING_IND_IDX
-    // Initialize gaming indicator
-    indicators[GAMING_IND_IDX].active = false;
 #endif
 }
 
@@ -145,11 +132,12 @@ void matrix_scan_shared(void) {
     // Only check timeout if we've received data before (last_activity != 0)
     if (!srgb_state.timed_out && srgb_state.last_activity != 0 && timer_elapsed32(srgb_state.last_activity) > 300) {
         srgb_state.timed_out = true;
+        signalrgb_mode_disable();
     }
 
     bool should_process = calculate_signalrgb_should_process();
-#    ifdef SRGB_IND_IDX
-    indicators[SRGB_IND_IDX].active = srgb_state.user_enabled && !should_process;
+#    ifdef SIGNALRGB_ENABLE
+    indicator_library[INDICATOR_SIGNALRGB].active = srgb_state.user_enabled && !should_process;
 #    endif
 #endif
 }
@@ -324,8 +312,8 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
 
     // Render active indicators (top layer, always visible)
     for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
-        if (indicators[i].active) {
-            rgb_matrix_set_color(indicators[i].index, indicators[i].color.r, indicators[i].color.g, indicators[i].color.b);
+        if (indicator_library[i].active && indicator_library[i].led_index != 255) {
+            rgb_matrix_set_color(indicator_library[i].led_index, indicator_library[i].color.r, indicator_library[i].color.g, indicator_library[i].color.b);
         }
     }
 
