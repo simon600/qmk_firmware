@@ -31,7 +31,8 @@ enum custom_keycodes_shared {
 
 // Universal indicators available in userspace
 #define SHARED_INDICATOR_IDS \
-    X(INDICATOR_MACRO_REC)   \
+    X(INDICATOR_MACRO_REC_1) \
+    X(INDICATOR_MACRO_REC_2) \
     IF_SIGNALRGB_ENABLED(X(INDICATOR_SIGNALRGB))
 
 // Allow keyboards to extend with their own indicators
@@ -90,6 +91,10 @@ bool get_permissive_hold_shared(uint16_t keycode, keyrecord_t *record);
 
 // Leader key
 void leader_end_shared(void);
+
+// Dynamic Macro
+bool dynamic_macro_record_start_shared(int8_t direction);
+bool dynamic_macro_record_end_shared(int8_t direction);
 
 #if defined(VIA_ENABLE) && defined(SIGNALRGB_ENABLE)
 // VIA command handling

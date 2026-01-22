@@ -140,6 +140,14 @@ void leader_end_user(void) {
     leader_end_shared();
 }
 
+bool dynamic_macro_record_start_user(int8_t direction) {
+    return dynamic_macro_record_start_shared(direction);
+}
+
+bool dynamic_macro_record_end_user(int8_t direction) {
+    return dynamic_macro_record_end_shared(direction);
+}
+
 #if defined(VIA_ENABLE) && defined(SIGNALRGB_ENABLE)
 bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
     return via_command_shared(src, data, length);

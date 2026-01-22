@@ -24,4 +24,4 @@
 
 // Map indicator IDs to physical LED indices and colors
 // Format: [ID] = {.led_index = INDEX, .color = {R, G, B}}
-#define KEYBOARD_LED_MAP [INDICATOR_MACRO_REC] = {.led_index = 255}, [INDICATOR_GAMING] = {.led_index = 14, .color = {255, 0, 0}}, M_SIGNALRGB_INDICATOR(36)
+#define KEYBOARD_LED_MAP [INDICATOR_MACRO_REC_1] = {.led_index = 56, .color = {255, 0, 0}}, [INDICATOR_MACRO_REC_2] = {.led_index = 57, .color = {255, 0, 0}}, [INDICATOR_GAMING] = {.led_index = 14, .color = {255, 0, 0}}, M_SIGNALRGB_INDICATOR(36)

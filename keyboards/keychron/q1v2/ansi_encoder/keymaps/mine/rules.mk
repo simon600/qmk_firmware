@@ -1,2 +1,4 @@
+USER_NAME := simon
+
 ENCODER_MAP_ENABLE = yes
 VIA_ENABLE = yes
