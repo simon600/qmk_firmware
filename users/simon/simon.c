@@ -223,7 +223,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             // Check real-time state (not cached) so first press after unblocking works
             if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
                 if (record->event.pressed) {
-                    tap_code16(C(A(G(KC_EQL))));
+                    tap_code16(S(C(A(G(KC_EQL)))));
                 }
                 return false;
             }
@@ -234,7 +234,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             // Check real-time state (not cached) so first press after unblocking works
             if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
                 if (record->event.pressed) {
-                    tap_code16(C(A(G(KC_MINS))));
+                    tap_code16(S(C(A(G(KC_MINS)))));
                 }
                 return false;
             }
@@ -245,7 +245,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             // Check real-time state (not cached) so first press after unblocking works
             if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
                 if (record->event.pressed) {
-                    tap_code16(C(A(G(KC_Q))));
+                    tap_code16(S(C(A(G(KC_Q)))));
                 }
                 return false;
             }
@@ -256,7 +256,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             // Check real-time state (not cached) so first press after unblocking works
             if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
                 if (record->event.pressed) {
-                    tap_code16(C(A(G(KC_A))));
+                    tap_code16(S(C(A(G(KC_A)))));
                 }
                 return false;
             }
@@ -387,4 +387,21 @@ void set_active_fn_layer(uint8_t layer) {
     }
 
     update_mod_led_mask(active_fn_layer);
+}
+
+bool dynamic_macro_record_start_shared(int8_t direction) {
+    if (direction == 1) {
+        indicator_library[INDICATOR_MACRO_REC_1].active = true;
+        indicator_library[INDICATOR_MACRO_REC_2].active = false;
+    } else if (direction == -1) {
+        indicator_library[INDICATOR_MACRO_REC_1].active = false;
+        indicator_library[INDICATOR_MACRO_REC_2].active = true;
+    }
+    return true;
+}
+
+bool dynamic_macro_record_end_shared(int8_t direction) {
+    indicator_library[INDICATOR_MACRO_REC_1].active = false;
+    indicator_library[INDICATOR_MACRO_REC_2].active = false;
+    return true;
 }
