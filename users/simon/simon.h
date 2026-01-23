@@ -11,10 +11,14 @@ enum custom_keycodes_shared {
     UG_ANIM1,
     UG_ANIM2,
     UG_ANIM3,
-    M_ENDW,
-    M_ENDM,
+    M_NW,
+    M_NM,
+    FN_LEAD_BASE,
+    FN_LEAD_MAX = FN_LEAD_BASE + 8,
     SAFE_RANGE_SHARED, // For keymaps to extend
 };
+
+#define FN_LEAD(layer) (FN_LEAD_BASE + layer)
 
 // --- CONSTANTS ---
 // Inactivity timeout: 5 minutes in milliseconds
@@ -33,6 +37,7 @@ enum custom_keycodes_shared {
 #define SHARED_INDICATOR_IDS \
     X(INDICATOR_MACRO_REC_1) \
     X(INDICATOR_MACRO_REC_2) \
+    X(INDICATOR_LEADER)      \
     IF_SIGNALRGB_ENABLED(X(INDICATOR_SIGNALRGB))
 
 // Allow keyboards to extend with their own indicators
@@ -90,6 +95,7 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max);
 bool get_permissive_hold_shared(uint16_t keycode, keyrecord_t *record);
 
 // Leader key
+void leader_start_shared(void);
 void leader_end_shared(void);
 
 // Dynamic Macro

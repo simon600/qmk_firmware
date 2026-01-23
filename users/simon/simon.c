@@ -176,6 +176,15 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
     }
 
     switch (keycode) {
+        case LT(1, KC_NO):
+        case LT(3, KC_NO):
+            if (record->tap.count > 0) {
+                if (!record->event.pressed) { // Trigger on release for better accuracy
+                    leader_start();
+                }
+                return false; // Don't send KC_NO
+            }
+            break;
         case UG_SRGB:
             if (record->event.pressed) {
 #ifdef SIGNALRGB_ENABLE
@@ -204,17 +213,19 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
         case UG_ANIM3:
             return false;
 
-        case M_ENDW:
+        case M_NW:
             if (record->event.pressed) {
                 tap_code16(C(KC_RGHT));
-                tap_code16(KC_RGHT);
+                tap_code16(C(KC_RGHT));
+                tap_code16(C(KC_LEFT));
             }
             return false;
 
-        case M_ENDM:
+        case M_NM:
             if (record->event.pressed) {
-                tap_code16(G(KC_RGHT));
-                tap_code16(KC_LEFT);
+                tap_code16(A(KC_RGHT));
+                tap_code16(A(KC_RGHT));
+                tap_code16(A(KC_LEFT));
             }
             return false;
 
@@ -285,6 +296,9 @@ layer_state_t layer_state_set_shared(layer_state_t state) {
 }
 
 bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
+    if (is_dimmed) {
+        return true;
+    }
 #ifdef SIGNALRGB_ENABLE
     // Apply SignalRGB colors first if processing (base layer)
     if (calculate_signalrgb_should_process()) {
@@ -330,7 +344,12 @@ bool get_permissive_hold_shared(uint16_t keycode, keyrecord_t *record) {
     }
 }
 
+void leader_start_shared(void) {
+    indicator_library[INDICATOR_LEADER].active = true;
+}
+
 void leader_end_shared(void) {
+    indicator_library[INDICATOR_LEADER].active = false;
     if (leader_sequence_one_key(KC_E)) {
         SEND_STRING("szymek.fogiel@gmail.com");
     }
