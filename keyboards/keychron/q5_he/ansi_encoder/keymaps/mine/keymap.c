@@ -2,6 +2,7 @@
 #include "keychron_common.h"
 #include "simon.h"
 #include "print.h"
+#include "profile.h"
 
 enum layers {
     MAC_BASE,
@@ -21,6 +22,8 @@ enum layers {
 #define MP1 QK_DYNAMIC_MACRO_PLAY_1
 #define MP2 QK_DYNAMIC_MACRO_PLAY_2
 #define MS QK_DYNAMIC_MACRO_RECORD_STOP
+
+bool gaming_mode_enabled = false;
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -107,7 +110,13 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     bool hrdw_fn_active = layer_state_cmp(state, HARDWARE);
     bool gaming_active  = layer_state_cmp(state, GAMING);
 
-    // Determine current FN layer
+    if (!gaming_mode_enabled && gaming_active) {
+        profile_select(1, false);
+    } else if (gaming_mode_enabled && !gaming_active) {
+        profile_select(0, false);
+    }
+    gaming_mode_enabled = gaming_active;
+
     uint8_t fn_layer = 0;
     if (win_fn_active)
         fn_layer = WIN_FN;
