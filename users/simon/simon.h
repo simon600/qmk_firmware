@@ -13,12 +13,8 @@ enum custom_keycodes_shared {
     UG_ANIM3,
     M_NW,
     M_NM,
-    FN_LEAD_BASE,
-    FN_LEAD_MAX = FN_LEAD_BASE + 8,
     SAFE_RANGE_SHARED, // For keymaps to extend
 };
-
-#define FN_LEAD(layer) (FN_LEAD_BASE + layer)
 
 // --- CONSTANTS ---
 // Inactivity timeout: 5 minutes in milliseconds
