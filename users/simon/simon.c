@@ -350,6 +350,7 @@ void leader_start_shared(void) {
 
 void leader_end_shared(void) {
     indicator_library[INDICATOR_LEADER].active = false;
+
     if (leader_sequence_one_key(KC_E)) {
         SEND_STRING("szymek.fogiel@gmail.com");
     }
