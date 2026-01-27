@@ -203,11 +203,23 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             return false;
 
         case UG_ANIM1:
+#ifdef SIGNALRGB_ENABLE
+            // Check real-time state (not cached) so first press after unblocking works
+            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
+                if (record->event.pressed) {
+                    tap_code16(S(C(A(G(KC_Z)))));
+                }
+                return false;
+            }
+            // Let QMK handle it when SignalRGB is disabled
+            return true;
+#else
             if (record->event.pressed) {
                 rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
                 rgb_matrix_sethsv(156, 191, 255);
             }
             return false;
+#endif
 
         case UG_ANIM2:
         case UG_ANIM3:
