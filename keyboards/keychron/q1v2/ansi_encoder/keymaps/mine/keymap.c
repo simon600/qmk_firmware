@@ -112,10 +112,13 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 layer_state_t layer_state_set_user(layer_state_t state) {
     bool win_fn_active = layer_state_cmp(state, WIN_FN);
     bool mac_fn_active = layer_state_cmp(state, MAC_FN);
+    bool hardware_active = layer_state_cmp(state, HARDWARE);
 
     // Determine current FN layer
     uint8_t fn_layer = 0;
-    if (win_fn_active)
+    if (hardware_active)
+        fn_layer = HARDWARE;
+    else if (win_fn_active)
         fn_layer = WIN_FN;
     else if (mac_fn_active)
         fn_layer = MAC_FN;
