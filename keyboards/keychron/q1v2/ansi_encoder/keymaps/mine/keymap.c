@@ -54,8 +54,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______,        MP1,        MP2,      _______,    G(KC_RGHT), _______,    _______,    _______,  _______,  _______,  G(KC_LEFT), _______,  _______,  _______,            _______,
         _______,        MS,         M_NM, A(KC_RIGHT),    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
         CW_TOGG,        MR1,        MR2,      KC_DEL,     _______,    _______,    KC_LEFT,    KC_DOWN,  KC_UP,    KC_RGHT,  _______,    _______,            _______,            KC_END,
-        _______,                    _______,  _______,    _______,    _______,    G(KC_LEFT), _______,  _______,  QK_LEAD,  _______,    _______,            _______,  _______,
-        _______,        _______,    _______,                                      _______,                                  _______,    _______,  _______,  _______,  _______,  _______),
+        _______,                    _______,  _______,    _______,    _______,    A(KC_LEFT), _______,  _______,  QK_LEAD,  _______,    _______,            _______,  _______,
+        _______,        _______,    FN_HRD,                                       _______,                                  _______,    _______,  _______,  _______,  _______,  _______),
 
     [WIN_BASE] = LAYOUT_ansi_82(
         KC_ESC,         KC_F1,      KC_F2,    KC_F3,      KC_F4,      KC_F5,      KC_F6,      KC_F7,    KC_F8,    KC_F9,    KC_F10,     KC_F11,   KC_F12,   KC_DEL,             KC_MUTE,
@@ -112,10 +112,13 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 layer_state_t layer_state_set_user(layer_state_t state) {
     bool win_fn_active = layer_state_cmp(state, WIN_FN);
     bool mac_fn_active = layer_state_cmp(state, MAC_FN);
+    bool hardware_active = layer_state_cmp(state, HARDWARE);
 
     // Determine current FN layer
     uint8_t fn_layer = 0;
-    if (win_fn_active)
+    if (hardware_active)
+        fn_layer = HARDWARE;
+    else if (win_fn_active)
         fn_layer = WIN_FN;
     else if (mac_fn_active)
         fn_layer = MAC_FN;
