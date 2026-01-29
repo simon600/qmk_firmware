@@ -13,6 +13,8 @@ enum custom_keycodes_shared {
     UG_ANIM3,
     M_NW,
     M_NM,
+    IND_BR_U,
+    IND_BR_D,
     SAFE_RANGE_SHARED, // For keymaps to extend
 };
 

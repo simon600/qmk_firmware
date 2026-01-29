@@ -10,9 +10,16 @@ static bool    rgb_adjusted_in_fn = false; // Whether RGB was adjusted while in 
 static uint8_t active_fn_layer    = 0;     // Which FN layer is active (0 if none)
 
 // Inactivity dimming state (5-minute timeout)
-static uint32_t last_activity_time = 0;     // Last keyboard activity timestamp
-static bool     is_dimmed          = false; // Whether brightness has been dimmed
-static uint8_t  saved_brightness   = 0;     // Original brightness before dimming
+static uint32_t last_activity_time   = 0;     // Last keyboard activity timestamp
+static bool     is_dimmed            = false; // Whether brightness has been dimmed
+static uint8_t  saved_brightness     = 0;     // Original brightness before dimming
+static uint8_t  indicator_brightness = 255;   // Indicator specific brightness
+
+#define MIN_SAFE_BRIGHTNESS 10
+#ifndef RGB_MATRIX_VAL_STEP
+#    define RGB_MATRIX_VAL_STEP 8
+#endif
+static bool bg_blackout_mode = false;
 
 #ifdef SIGNALRGB_ENABLE
 // SignalRGB control state - immediate flags that affect SignalRGB calculation
@@ -83,6 +90,10 @@ static void update_mod_led_mask(uint8_t fn_layer) {
 
 // --- PUBLIC API FUNCTIONS ---
 
+void eeconfig_init_user(void) {
+    eeconfig_update_user(255);
+}
+
 // State access functions
 indicator_t *get_indicators(void) {
     return indicator_library;
@@ -104,6 +115,9 @@ void keyboard_post_init_shared(void) {
     is_dimmed          = false;
     saved_brightness   = 0;
 
+    // Load indicator brightness from EEPROM
+    indicator_brightness = eeconfig_read_user();
+
 #ifdef SIGNALRGB_ENABLE
     // Initialize SignalRGB control state
     srgb_state.user_enabled  = true;
@@ -122,7 +136,7 @@ void matrix_scan_shared(void) {
         // Save current brightness and dim to minimum (val=16, just above off)
         saved_brightness = rgb_matrix_get_val();
         if (saved_brightness > 1) { // Only dim if brightness is above minimum
-            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 16);
+            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS);
             is_dimmed = true;
         }
     }
@@ -251,7 +265,15 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 return false;
             }
             // Let QMK handle it when SignalRGB is disabled
-            return true;
+            if (record->event.pressed) {
+                if (bg_blackout_mode) {
+                    bg_blackout_mode = false;
+                    rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP);
+                } else {
+                    rgb_matrix_increase_val_noeeprom();
+                }
+            }
+            return false;
 
         case UG_VALD:
             // Check real-time state (not cached) so first press after unblocking works
@@ -262,7 +284,17 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 return false;
             }
             // Let QMK handle it when SignalRGB is disabled
-            return true;
+            if (record->event.pressed) {
+                uint8_t current_val = rgb_matrix_get_val();
+                if (current_val <= MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP) {
+                    rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS);
+                    bg_blackout_mode = true;
+                } else {
+                    bg_blackout_mode = false;
+                    rgb_matrix_decrease_val_noeeprom();
+                }
+            }
+            return false;
 
         case UG_NEXT:
             // Check real-time state (not cached) so first press after unblocking works
@@ -291,6 +323,22 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             // This prevents flickers when toggling RGB on/off
             return true;
 #endif
+        case IND_BR_U:
+            if (record->event.pressed) {
+                if (indicator_brightness < 255) {
+                    indicator_brightness = (indicator_brightness + RGB_MATRIX_VAL_STEP > 255) ? 255 : indicator_brightness + RGB_MATRIX_VAL_STEP;
+                    eeconfig_update_user(indicator_brightness);
+                }
+            }
+            return false;
+        case IND_BR_D:
+            if (record->event.pressed) {
+                if (indicator_brightness > 0) {
+                    indicator_brightness = (indicator_brightness < RGB_MATRIX_VAL_STEP) ? 0 : indicator_brightness - RGB_MATRIX_VAL_STEP;
+                    eeconfig_update_user(indicator_brightness);
+                }
+            }
+            return false;
     }
 
     return true;
@@ -308,9 +356,16 @@ layer_state_t layer_state_set_shared(layer_state_t state) {
 }
 
 bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
+    if (bg_blackout_mode) {
+        for (uint8_t i = led_min; i < led_max; i++) {
+            rgb_matrix_set_color(i, 0, 0, 0);
+        }
+    }
+
     if (is_dimmed) {
         return true;
     }
+
 #ifdef SIGNALRGB_ENABLE
     // Apply SignalRGB colors first if processing (base layer)
     if (calculate_signalrgb_should_process()) {
@@ -326,7 +381,9 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
         for (uint8_t i = led_min; i < led_max; i++) {
             if (i < RGB_MATRIX_LED_COUNT) {
                 if (mod_led_mask[i]) {
-                    rgb_matrix_set_color(i, 255, 255, 255);
+                    // Scale brightness
+                    uint8_t v = (255 * (uint16_t)indicator_brightness) / 255;
+                    rgb_matrix_set_color(i, v, v, v);
                 } else if (!rgb_adjusted_in_fn) {
                     // Only black out if RGB hasn't been adjusted
                     rgb_matrix_set_color(i, 0, 0, 0);
@@ -339,7 +396,12 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
     // Render active indicators (top layer, always visible)
     for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
         if (indicator_library[i].active && indicator_library[i].led_index != 255) {
-            rgb_matrix_set_color(indicator_library[i].led_index, indicator_library[i].color.r, indicator_library[i].color.g, indicator_library[i].color.b);
+            // Scale brightness
+            // Basic approximation: scale each component by the brightness ratio
+            uint8_t r = (indicator_library[i].color.r * (uint16_t)indicator_brightness) / 255;
+            uint8_t g = (indicator_library[i].color.g * (uint16_t)indicator_brightness) / 255;
+            uint8_t b = (indicator_library[i].color.b * (uint16_t)indicator_brightness) / 255;
+            rgb_matrix_set_color(indicator_library[i].led_index, r, g, b);
         }
     }
 

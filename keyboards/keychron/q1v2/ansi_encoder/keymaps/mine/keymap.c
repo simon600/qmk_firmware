@@ -25,6 +25,7 @@ enum layers {
     WIN_BASE,
     WIN_FN,
     HARDWARE,
+    HARDWARE2,
 };
 
 #define FN_MAC MO(MAC_FN)
@@ -32,6 +33,7 @@ enum layers {
 #define FN_LMAC LT(MAC_FN, KC_NO)
 #define FN_LWIN LT(WIN_FN, KC_NO)
 #define FN_HRD MO(HARDWARE)
+#define FN_HRD2 MO(HARDWARE2)
 #define MR1 QK_DYNAMIC_MACRO_RECORD_START_1
 #define MR2 QK_DYNAMIC_MACRO_RECORD_START_2
 #define MP1 QK_DYNAMIC_MACRO_PLAY_1
@@ -79,6 +81,14 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______,        UG_NEXT,    UG_VALU,  UG_HUEU,    UG_SATU,    UG_SPDU,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
         _______,        UG_PREV,    UG_VALD,  UG_HUED,    UG_SATD,    UG_SPDD,    _______,    _______,  _______,  _______,  _______,    _______,            _______,            _______,
         _______,                    UG_ANIM1, _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,            _______,  _______,
+        _______,        FN_HRD2,    _______,                                      _______,                                  _______,    _______,  _______,  _______,  _______,  _______),
+
+    [HARDWARE2] = LAYOUT_ansi_82(
+        _______,        _______,    _______,  _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
+        _______,        _______,    _______,  _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
+        _______,        _______,    _______,  _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
+        _______,        _______,    _______,  _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,            _______,            _______,
+        _______,                    _______,  _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,            _______,  _______,
         _______,        _______,    _______,                                      _______,                                  _______,    _______,  _______,  _______,  _______,  _______)
 };
 
@@ -88,7 +98,8 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
     [MAC_FN]   = {ENCODER_CCW_CW(MS_WHLU, MS_WHLR)},
     [WIN_BASE] = {ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
     [WIN_FN]   = {ENCODER_CCW_CW(MS_WHLU, MS_WHLD)},
-    [HARDWARE] = {ENCODER_CCW_CW(UG_VALD, UG_VALU)}
+    [HARDWARE] = {ENCODER_CCW_CW(UG_VALD, UG_VALU)},
+    [HARDWARE2] = {ENCODER_CCW_CW(IND_BR_D, IND_BR_U)}
 };
 #endif // ENCODER_MAP_ENABLE
 
