@@ -10,10 +10,10 @@ static bool    rgb_adjusted_in_fn = false; // Whether RGB was adjusted while in 
 static uint8_t active_fn_layer    = 0;     // Which FN layer is active (0 if none)
 
 // Inactivity dimming state (5-minute timeout)
-static uint32_t last_activity_time = 0;     // Last keyboard activity timestamp
-static bool     is_dimmed          = false; // Whether brightness has been dimmed
-static uint8_t  saved_brightness   = 0;     // Original brightness before dimming
-static uint8_t  indicator_brightness = 255; // Indicator specific brightness
+static uint32_t last_activity_time   = 0;     // Last keyboard activity timestamp
+static bool     is_dimmed            = false; // Whether brightness has been dimmed
+static uint8_t  saved_brightness     = 0;     // Original brightness before dimming
+static uint8_t  indicator_brightness = 255;   // Indicator specific brightness
 
 #define MIN_SAFE_BRIGHTNESS 10
 #ifndef RGB_MATRIX_VAL_STEP
@@ -268,9 +268,9 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             if (record->event.pressed) {
                 if (bg_blackout_mode) {
                     bg_blackout_mode = false;
-                    rgb_matrix_set_val(MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP);
+                    rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP);
                 } else {
-                    rgb_matrix_step_val();
+                    rgb_matrix_increase_val_noeeprom();
                 }
             }
             return false;
@@ -287,11 +287,11 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             if (record->event.pressed) {
                 uint8_t current_val = rgb_matrix_get_val();
                 if (current_val <= MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP) {
-                    rgb_matrix_set_val(MIN_SAFE_BRIGHTNESS);
+                    rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS);
                     bg_blackout_mode = true;
                 } else {
                     bg_blackout_mode = false;
-                    rgb_matrix_step_val_reverse();
+                    rgb_matrix_decrease_val_noeeprom();
                 }
             }
             return false;

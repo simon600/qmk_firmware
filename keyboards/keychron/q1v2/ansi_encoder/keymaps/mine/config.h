@@ -1,6 +1,6 @@
 #pragma once
 
-#define DYNAMIC_KEYMAP_LAYER_COUNT 5
+#define DYNAMIC_KEYMAP_LAYER_COUNT 6
 // --- X-Macro Indicator Registry Configuration ---
 
 // #define KEYBOARD_INDICATOR_IDS
