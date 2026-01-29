@@ -14,6 +14,12 @@ static uint32_t last_activity_time = 0;     // Last keyboard activity timestamp
 static bool     is_dimmed          = false; // Whether brightness has been dimmed
 static uint8_t  saved_brightness   = 0;     // Original brightness before dimming
 
+#define MIN_SAFE_BRIGHTNESS 10
+#ifndef RGB_MATRIX_VAL_STEP
+#    define RGB_MATRIX_VAL_STEP 8
+#endif
+static bool bg_blackout_mode = false;
+
 #ifdef SIGNALRGB_ENABLE
 // SignalRGB control state - immediate flags that affect SignalRGB calculation
 static signalrgb_state_t srgb_state = {0};
@@ -122,7 +128,7 @@ void matrix_scan_shared(void) {
         // Save current brightness and dim to minimum (val=16, just above off)
         saved_brightness = rgb_matrix_get_val();
         if (saved_brightness > 1) { // Only dim if brightness is above minimum
-            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 16);
+            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS);
             is_dimmed = true;
         }
     }
@@ -251,7 +257,15 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 return false;
             }
             // Let QMK handle it when SignalRGB is disabled
-            return true;
+            if (record->event.pressed) {
+                if (bg_blackout_mode) {
+                    bg_blackout_mode = false;
+                    rgb_matrix_set_val(MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP);
+                } else {
+                    rgb_matrix_step_val();
+                }
+            }
+            return false;
 
         case UG_VALD:
             // Check real-time state (not cached) so first press after unblocking works
@@ -262,7 +276,17 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 return false;
             }
             // Let QMK handle it when SignalRGB is disabled
-            return true;
+            if (record->event.pressed) {
+                uint8_t current_val = rgb_matrix_get_val();
+                if (current_val <= MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP) {
+                    rgb_matrix_set_val(MIN_SAFE_BRIGHTNESS);
+                    bg_blackout_mode = true;
+                } else {
+                    bg_blackout_mode = false;
+                    rgb_matrix_step_val_reverse();
+                }
+            }
+            return false;
 
         case UG_NEXT:
             // Check real-time state (not cached) so first press after unblocking works
@@ -308,9 +332,16 @@ layer_state_t layer_state_set_shared(layer_state_t state) {
 }
 
 bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
+    if (bg_blackout_mode) {
+        for (uint8_t i = led_min; i < led_max; i++) {
+            rgb_matrix_set_color(i, 0, 0, 0);
+        }
+    }
+
     if (is_dimmed) {
         return true;
     }
+
 #ifdef SIGNALRGB_ENABLE
     // Apply SignalRGB colors first if processing (base layer)
     if (calculate_signalrgb_should_process()) {
