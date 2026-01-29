@@ -15,7 +15,7 @@ static bool     is_dimmed            = false; // Whether brightness has been dim
 static uint8_t  saved_brightness     = 0;     // Original brightness before dimming
 static uint8_t  indicator_brightness = 255;   // Indicator specific brightness
 
-#define MIN_SAFE_BRIGHTNESS 10
+#define MIN_SAFE_BRIGHTNESS 50
 #ifndef RGB_MATRIX_VAL_STEP
 #    define RGB_MATRIX_VAL_STEP 8
 #endif
@@ -255,15 +255,16 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             }
             return false;
 
-#ifdef SIGNALRGB_ENABLE
         case UG_VALU:
             // Check real-time state (not cached) so first press after unblocking works
+#ifdef SIGNALRGB_ENABLE
             if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
                 if (record->event.pressed) {
                     tap_code16(S(C(A(G(KC_EQL)))));
                 }
                 return false;
             }
+#endif
             // Let QMK handle it when SignalRGB is disabled
             if (record->event.pressed) {
                 if (bg_blackout_mode) {
@@ -277,12 +278,14 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
 
         case UG_VALD:
             // Check real-time state (not cached) so first press after unblocking works
+#ifdef SIGNALRGB_ENABLE
             if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
                 if (record->event.pressed) {
                     tap_code16(S(C(A(G(KC_MINS)))));
                 }
                 return false;
             }
+#endif
             // Let QMK handle it when SignalRGB is disabled
             if (record->event.pressed) {
                 uint8_t current_val = rgb_matrix_get_val();
@@ -296,6 +299,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             }
             return false;
 
+#ifdef SIGNALRGB_ENABLE
         case UG_NEXT:
             // Check real-time state (not cached) so first press after unblocking works
             if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
@@ -317,12 +321,12 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             }
             // Let QMK handle it when SignalRGB is disabled
             return true;
+#endif
 
         case UG_TOGG:
             // RGB toggle should always use QMK handling, not SignalRGB
             // This prevents flickers when toggling RGB on/off
             return true;
-#endif
         case IND_BR_U:
             if (record->event.pressed) {
                 if (indicator_brightness < 255) {
@@ -449,9 +453,6 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
             return false;
     }
 
-    // Track USB activity for inactivity dimming
-    register_activity();
-
     srgb_state.last_activity = timer_read32();
 
     // Clear timeout flag when receiving data
@@ -461,6 +462,8 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
 
     // Process SignalRGB HID messages if user hasn't disabled it
     if (calculate_signalrgb_should_process() && srgb_raw_hid_rx(data, length)) {
+        // Track USB activity for inactivity dimming
+        register_activity();
         return true;
     }
 
