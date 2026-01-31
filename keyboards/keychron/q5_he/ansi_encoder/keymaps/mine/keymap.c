@@ -132,7 +132,7 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     bool win_fn_active  = layer_state_cmp(state, WIN_FN);
     bool mac_fn_active  = layer_state_cmp(state, MAC_FN);
     bool hrdw_fn_active = layer_state_cmp(state, HARDWARE) || layer_state_cmp(state, HARDWARE2);
-    bool gaming_active  = layer_state_cmp(state, GAMING) || layer_state_cmp(state, GAMING2);
+    bool gaming_active  = layer_state_cmp(state, GAMING);
 
     if (!gaming_mode_enabled && gaming_active) {
         profile_select(1, false);
