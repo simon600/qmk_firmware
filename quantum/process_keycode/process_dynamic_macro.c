@@ -101,7 +101,7 @@ void dynamic_macro_record_start(keyrecord_t **macro_pointer, keyrecord_t *macro_
     dynamic_macro_record_start_kb(direction);
 
     clear_keyboard();
-    layer_clear();
+    // layer_clear();
     *macro_pointer = macro_buffer;
 }
 
@@ -118,7 +118,7 @@ void dynamic_macro_play(keyrecord_t *macro_buffer, keyrecord_t *macro_end, int8_
     layer_state_t saved_layer_state = layer_state;
 
     clear_keyboard();
-    layer_clear();
+    // layer_clear();
 
     while (macro_buffer != macro_end) {
         process_record(macro_buffer);
