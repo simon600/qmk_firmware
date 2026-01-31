@@ -10,6 +10,7 @@ enum layers {
     WIN_BASE,
     WIN_FN,
     GAMING,
+    GAMING2,
     HARDWARE,
     HARDWARE2,
 };
@@ -21,6 +22,7 @@ enum layers {
 #define FN_HRD MO(HARDWARE)
 #define FN_HRD2 MO(HARDWARE2)
 #define TG_GMG TG(GAMING)
+#define FN_GMG2 MO(GAMING2)
 #define MR1 QK_DYNAMIC_MACRO_RECORD_START_1
 #define MR2 QK_DYNAMIC_MACRO_RECORD_START_2
 #define MP1 QK_DYNAMIC_MACRO_PLAY_1
@@ -56,11 +58,11 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_LCTL,               KC_LWIN,  KC_LALT,                                    LT(WIN_FN, KC_SPC),                       KC_RALT,    FN_LWIN,  KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT,            KC_P0,    KC_PDOT,  KC_PENT),
 
     [WIN_FN] = LAYOUT_ansi_101(
-        _______,                         KC_BRID,    KC_BRIU,  KC_TASK,    KC_FILE,  UG_VALD,    UG_VALU,  KC_MPRV,  KC_MPLY,  KC_MNXT,    _______,  _______,  _______,            _______,  _______,   _______,  _______,  _______,
+        _______,                         KC_BRID,    KC_BRIU,  KC_TASK,    KC_FILE,  UG_VALD,    UG_VALU,  KC_MPRV,  KC_MPLY,  KC_MNXT,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
         _______,               MP1,      MP2,        _______,  KC_END,     _______,  _______,    _______,  _______,  _______,  KC_HOME,    _______,  _______,  KC_DEL,             _______,  _______,  _______,  _______,  _______,
         _______,               MS,       M_NW,    C(KC_RGHT),  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,
         CW_TOGG,               MR1,      MR2,        KC_DEL,   _______,    _______,  KC_LEFT,    KC_DOWN,  KC_UP,    KC_RGHT,  _______,    _______,            _______,            KC_END,   _______,  _______,  _______,  _______,
-        _______,                         _______,    _______,  _______,    _______,  C(KC_LEFT), _______,  _______,  QK_LEAD,  _______,    _______,            _______,  _______,            _______,  _______,  _______,
+        _______,                         _______,    _______,  _______,    _______,  C(KC_LEFT), _______,  _______,  QK_LEAD,  _______,    _______,            _______,  _______,            _______,  _______,      _______,
         _______,               _______,  _______,                                    _______,                                  _______,    _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
 
     [GAMING] = LAYOUT_ansi_101(
@@ -68,8 +70,16 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______,               _______,  _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
         _______,               _______,  _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,
         KC_RALT,               _______,  _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,            _______,            _______,  _______,  _______,  _______,  _______,
-        _______,                         _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,            _______,  _______,            _______,  _______,  _______,
-        _______,               _______,  _______,                                    KC_SPC,                                   _______,    _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
+        _______,                         _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,            _______,  _______,            MP1,      MP2,      _______,
+        _______,               _______,  _______,                                    KC_SPC,                                   _______,    _______,  _______,  _______,  _______,  _______,            FN_GMG2,  _______,  _______),
+
+    [GAMING2] = LAYOUT_ansi_101(
+        _______,                         _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
+        _______,               _______,  _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
+        _______,               _______,  _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,
+        _______,               _______,  _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,            _______,            _______,  _______,  _______,  _______,  _______,
+        _______,                         _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,            _______,  _______,            MR1,      MR2,      _______,
+        _______,               _______,  _______,                                    _______,                                  _______,    _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
 
     [HARDWARE] = LAYOUT_ansi_101(
         _______,                         _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  UG_TOGG,
@@ -95,6 +105,7 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
     [WIN_BASE]  = {ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
     [WIN_FN]    = {ENCODER_CCW_CW(MS_WHLU, MS_WHLD)},
     [GAMING]    = {ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
+    [GAMING2]   = {ENCODER_CCW_CW(KC_TRNS, KC_TRNS)},
     [HARDWARE]  = {ENCODER_CCW_CW(UG_VALD, UG_VALU)},
     [HARDWARE2] = {ENCODER_CCW_CW(IND_BR_D, IND_BR_U)},
 };
@@ -120,8 +131,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 layer_state_t layer_state_set_user(layer_state_t state) {
     bool win_fn_active  = layer_state_cmp(state, WIN_FN);
     bool mac_fn_active  = layer_state_cmp(state, MAC_FN);
-    bool hrdw_fn_active = layer_state_cmp(state, HARDWARE);
-    bool gaming_active  = layer_state_cmp(state, GAMING);
+    bool hrdw_fn_active = layer_state_cmp(state, HARDWARE) || layer_state_cmp(state, HARDWARE2);
+    bool gaming_active  = layer_state_cmp(state, GAMING) || layer_state_cmp(state, GAMING2);
 
     if (!gaming_mode_enabled && gaming_active) {
         profile_select(1, false);
@@ -137,6 +148,8 @@ layer_state_t layer_state_set_user(layer_state_t state) {
         fn_layer = MAC_FN;
     else if (hrdw_fn_active)
         fn_layer = HARDWARE;
+    else if (layer_state_cmp(state, GAMING2))
+        fn_layer = GAMING2;
 
     // Update shared state
     set_active_fn_layer(fn_layer);
