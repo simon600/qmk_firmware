@@ -30,6 +30,8 @@ static signalrgb_state_t srgb_state = {0};
 // Initialize with defaults: all LED indices to 255 (disabled), inactive, black color
 // Keyboard-specific mappings are applied via KEYBOARD_LED_MAP macro
 indicator_t indicator_library[INDICATOR_COUNT] = {[0 ... INDICATOR_COUNT - 1] = {.led_index = 255, .active = false, .color = {0, 0, 0}},
+                                                  [INDICATOR_MACRO_REC]       = {.led_index = 255, .active = false, .color = {255, 0, 0}},
+                                                  [INDICATOR_LEADER]          = {.led_index = 255, .active = false, .color = {255, 255, 255}},
 #ifdef KEYBOARD_LED_MAP
                                                   KEYBOARD_LED_MAP
 #endif
@@ -156,6 +158,23 @@ void matrix_scan_shared(void) {
 #endif
 }
 
+void update_led_index(uint8_t id, keyrecord_t *record) {
+    // 1. Get Row and Col from the event
+    uint8_t row = record->event.key.row;
+    uint8_t col = record->event.key.col;
+
+    // 2. Look up the LED Index
+    // This table is defined in your keyboard's config (usually rgb_matrix.c)
+    uint8_t led_index = g_led_config.matrix_co[row][col];
+
+    // 3. Safety Check
+    // Some matrix positions (like "ghost" keys) might not have an LED.
+    // QMK uses NO_LED (usually 255) to mark these.
+    if (led_index != NO_LED) {
+        indicator_library[id].led_index = led_index;
+    }
+}
+
 bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
     if (!process_caps_word(keycode, record)) {
         return false;
@@ -190,8 +209,13 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
     }
 
     switch (keycode) {
+        case (QK_DYNAMIC_MACRO_RECORD_START_1):
+        case (QK_DYNAMIC_MACRO_RECORD_START_2):
+            update_led_index(INDICATOR_MACRO_REC, record);
+            break;
         case LT(1, KC_NO):
         case LT(3, KC_NO):
+            update_led_index(INDICATOR_LEADER, record);
             if (record->tap.count > 0) {
                 if (!record->event.pressed) { // Trigger on release for better accuracy
                     leader_start();
@@ -487,18 +511,11 @@ void set_active_fn_layer(uint8_t layer) {
 }
 
 bool dynamic_macro_record_start_shared(int8_t direction) {
-    if (direction == 1) {
-        indicator_library[INDICATOR_MACRO_REC_1].active = true;
-        indicator_library[INDICATOR_MACRO_REC_2].active = false;
-    } else if (direction == -1) {
-        indicator_library[INDICATOR_MACRO_REC_1].active = false;
-        indicator_library[INDICATOR_MACRO_REC_2].active = true;
-    }
+    indicator_library[INDICATOR_MACRO_REC].active = true;
     return true;
 }
 
 bool dynamic_macro_record_end_shared(int8_t direction) {
-    indicator_library[INDICATOR_MACRO_REC_1].active = false;
-    indicator_library[INDICATOR_MACRO_REC_2].active = false;
+    indicator_library[INDICATOR_MACRO_REC].active = false;
     return true;
 }

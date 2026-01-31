@@ -33,8 +33,7 @@ enum custom_keycodes_shared {
 
 // Universal indicators available in userspace
 #define SHARED_INDICATOR_IDS \
-    X(INDICATOR_MACRO_REC_1) \
-    X(INDICATOR_MACRO_REC_2) \
+    X(INDICATOR_MACRO_REC)   \
     X(INDICATOR_LEADER)      \
     IF_SIGNALRGB_ENABLED(X(INDICATOR_SIGNALRGB))
 
