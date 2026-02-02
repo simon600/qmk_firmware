@@ -1,6 +1,9 @@
 #include "simon.h"
 #include "keychron_common.h"
 #include "print.h"
+#ifdef OPENRGB_ENABLE
+#    include "openrgb.h"
+#endif
 
 // --- STATE STORAGE ---
 // Clean separation: Immediate control flags vs. Deferred rendering actions
@@ -143,18 +146,17 @@ void matrix_scan_shared(void) {
         }
     }
 
-#ifdef SIGNALRGB_ENABLE
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
     // Check for SignalRGB timeout (immediate state update)
     // Only check timeout if we've received data before (last_activity != 0)
     if (!srgb_state.timed_out && srgb_state.last_activity != 0 && timer_elapsed32(srgb_state.last_activity) > 300) {
+        uprintf("OpenRGB timeout");
         srgb_state.timed_out = true;
         signalrgb_mode_disable();
     }
 
-    bool should_process = calculate_signalrgb_should_process();
-#    ifdef SIGNALRGB_ENABLE
+    bool should_process                           = calculate_signalrgb_should_process();
     indicator_library[INDICATOR_SIGNALRGB].active = srgb_state.user_enabled && !should_process;
-#    endif
 #endif
 }
 
@@ -249,15 +251,12 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 }
                 return false;
             }
-            // Let QMK handle it when SignalRGB is disabled
-            return true;
-#else
+#endif
             if (record->event.pressed) {
                 rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
                 rgb_matrix_sethsv(156, 191, 255);
             }
             return false;
-#endif
 
         case UG_ANIM2:
         case UG_ANIM3:
@@ -394,16 +393,6 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
         return true;
     }
 
-#ifdef SIGNALRGB_ENABLE
-    // Apply SignalRGB colors first if processing (base layer)
-    if (calculate_signalrgb_should_process()) {
-        for (uint8_t i = led_min; i < led_max; i++) {
-            rgb_led_t color = signalrgb_get_color(i);
-            rgb_matrix_set_color(i, color.r, color.g, color.b);
-        }
-    }
-#endif
-
     // Show FN layer mask if FN layer is active (override layer)
     if (active_fn_layer != 0) {
         for (uint8_t i = led_min; i < led_max; i++) {
@@ -458,12 +447,15 @@ void leader_end_shared(void) {
     }
 }
 
-#if defined(VIA_ENABLE) && defined(SIGNALRGB_ENABLE)
-extern bool kc_raw_hid_rx(uint8_t src, uint8_t *data, uint8_t length);
+#if defined(VIA_ENABLE)
+#    if defined(SIGNALRGB_ENABLE)
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
+#    endif
 
 bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
     switch (data[0]) {
+#    if defined(SIGNALRGB_ENABLE)
+        // SIGNALRGB
         case GET_QMK_VERSION:
         case GET_PROTOCOL_VERSION:
         case GET_UNIQUE_IDENTIFIER:
@@ -473,6 +465,20 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
         case GET_TOTAL_LEDS:
         case GET_FIRMWARE_TYPE:
             break;
+#    endif
+#    if defined(OPENRGB_ENABLE)
+        // OPENRGB
+        case OPENRGB_GET_PROTOCOL_VERSION:
+        case OPENRGB_GET_QMK_VERSION:
+        case OPENRGB_GET_DEVICE_INFO:
+        case OPENRGB_GET_MODE_INFO:
+        case OPENRGB_GET_LED_INFO:
+        case OPENRGB_GET_ENABLED_MODES:
+        case OPENRGB_SET_MODE:
+        case OPENRGB_DIRECT_MODE_SET_SINGLE_LED:
+        case OPENRGB_DIRECT_MODE_SET_LEDS:
+            break;
+#    endif
         default:
             return false;
     }
@@ -485,10 +491,22 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
     }
 
     // Process SignalRGB HID messages if user hasn't disabled it
-    if (calculate_signalrgb_should_process() && srgb_raw_hid_rx(data, length)) {
-        // Track USB activity for inactivity dimming
-        register_activity();
-        return true;
+    if (calculate_signalrgb_should_process()) {
+#    if defined(SIGNALRGB_ENABLE)
+        if (srgb_raw_hid_rx(data, length)) {
+            // Track USB activity for inactivity dimming
+            srgb_state.mode = SIGNALRGB;
+            register_activity();
+            return true;
+        }
+#    endif
+#    if defined(OPENRGB_ENABLE)
+        if (openrgb_raw_hid_receive(data, length)) {
+            srgb_state.mode = OPENRGB;
+            register_activity();
+            return true;
+        }
+#    endif
     }
 
     return false;

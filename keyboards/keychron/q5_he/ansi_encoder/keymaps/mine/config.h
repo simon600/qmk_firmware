@@ -21,6 +21,10 @@
 #else
 #    define M_SIGNALRGB_INDICATOR(idx)
 #endif
+#if defined(OPENRGB_ENABLE)
+#    define RAW_USAGE_PAGE 0xFF60
+#    define RAW_USAGE_ID 0x61
+#endif
 
 // Map indicator IDs to physical LED indices and colors
 // Format: [ID] = {.led_index = INDEX, .color = {R, G, B}}

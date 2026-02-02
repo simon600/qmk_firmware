@@ -4,6 +4,9 @@
 #ifdef SIGNALRGB_ENABLE
 #    include "signalrgb.h"
 #endif
+#ifdef OPENRGB_ENABLE
+#    include "openrgb.h"
+#endif
 
 // --- CUSTOM KEYCODES ---
 enum custom_keycodes_shared {
@@ -60,11 +63,18 @@ typedef struct {
     rgb_led_t color;     // RGB color value
 } indicator_t;
 
+enum rgb_usb_mode {
+    OFF       = 0,
+    SIGNALRGB = 1,
+    OPENRGB   = 2,
+};
+
 #ifdef SIGNALRGB_ENABLE
 typedef struct {
     uint32_t last_activity; // Last HID activity timestamp
     bool     timed_out;     // Whether SignalRGB has timed out
     bool     user_enabled;  // Whether user has enabled SignalRGB via toggle
+    uint8_t  mode;
 } signalrgb_state_t;
 #endif
 
