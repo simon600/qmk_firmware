@@ -111,6 +111,11 @@ void keyboard_post_init_user(void) {
 
 void matrix_scan_user(void) {
     matrix_scan_shared();
+
+#ifdef SIGNALRGB_ENABLE
+    get_indicators()[INDICATOR_SIGNALRGB].active = layer_state_is(HARDWARE);
+#endif
+
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {

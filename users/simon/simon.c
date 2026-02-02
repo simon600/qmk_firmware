@@ -149,11 +149,15 @@ void matrix_scan_shared(void) {
     if (!srgb_state.timed_out && srgb_state.last_activity != 0 && timer_elapsed32(srgb_state.last_activity) > 300) {
         srgb_state.timed_out = true;
     }
-
-    bool should_process = calculate_signalrgb_should_process();
-#    ifdef SIGNALRGB_ENABLE
-    indicator_library[INDICATOR_SIGNALRGB].active = srgb_state.user_enabled && !should_process;
-#    endif
+    if (srgb_state.user_enabled) {
+        get_indicators()[INDICATOR_SIGNALRGB].color = (rgb_led_t){255, 255, 255};
+    } else {
+        if (srgb_state.timed_out) {
+            get_indicators()[INDICATOR_SIGNALRGB].color = (rgb_led_t){0, 255, 0};
+        } else {
+            get_indicators()[INDICATOR_SIGNALRGB].color = (rgb_led_t){255, 0, 0};
+        }
+    }
 #endif
 }
 
@@ -471,8 +475,12 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
         srgb_state.timed_out = false;
     }
 
+    if (!srgb_state.user_enabled && data[0] == SET_SIGNALRGB_MODE_ENABLE) {
+        return false;
+    }
+
     // Process SignalRGB HID messages if user hasn't disabled it
-    if (calculate_signalrgb_should_process() && srgb_raw_hid_rx(data, length)) {
+    if (srgb_raw_hid_rx(data, length)) {
         // Track USB activity for inactivity dimming
         register_activity();
         return true;
@@ -505,4 +513,12 @@ bool dynamic_macro_record_start_shared(int8_t direction) {
 bool dynamic_macro_record_end_shared(int8_t direction) {
     indicator_library[INDICATOR_MACRO_REC].active = false;
     return true;
+}
+
+bool get_signalrgb_user_enabled(void) {
+#ifdef SIGNALRGB_ENABLE
+    return srgb_state.user_enabled;
+#else
+    return false;
+#endif
 }
