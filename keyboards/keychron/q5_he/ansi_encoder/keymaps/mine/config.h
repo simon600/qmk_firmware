@@ -7,9 +7,6 @@
 #define RGB_MATRIX_DEFAULT_SAT 191
 #define RGB_MATRIX_DEFAULT_VAL RGB_MATRIX_MAXIMUM_BRIGHTNESS // Sets the default brightness value, if none has been set
 
-// Use SignalRGB buffer mode for better control of LED application order
-#define SIGNALRGB_USE_BUFFER
-
 // --- X-Macro Indicator Registry Configuration ---
 
 // Define keyboard-specific indicator IDs (extends SHARED_INDICATOR_IDS)

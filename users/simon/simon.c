@@ -1,9 +1,6 @@
 #include "simon.h"
 #include "keychron_common.h"
 #include "print.h"
-#ifdef OPENRGB_ENABLE
-#    include "openrgb.h"
-#endif
 
 // --- STATE STORAGE ---
 // Clean separation: Immediate control flags vs. Deferred rendering actions
@@ -24,9 +21,9 @@ static uint8_t  indicator_brightness = 255;   // Indicator specific brightness
 #endif
 static bool bg_blackout_mode = false;
 
-#ifdef SIGNALRGB_ENABLE
-// SignalRGB control state - immediate flags that affect SignalRGB calculation
-static signalrgb_state_t srgb_state = {0};
+#ifdef USB_RGB_ENABLE
+// USB RGB control state - immediate flags that affect RGB calculation
+static usb_rgb_state_t usb_rgb_state = {0};
 #endif
 
 // --- COMPILE-TIME INDICATOR REGISTRY ---
@@ -45,14 +42,33 @@ static bool mod_led_mask[RGB_MATRIX_LED_COUNT];
 
 // --- STATE MANAGEMENT FUNCTIONS ---
 
-#ifdef SIGNALRGB_ENABLE
-// Calculate whether SignalRGB should process LED updates (ALWAYS COMPUTED, NEVER CACHED)
+#ifdef USB_RGB_ENABLE
+// Calculate whether USB RGB should process LED updates (ALWAYS COMPUTED, NEVER CACHED)
 // This is derived from immediate control state and should be called fresh each time
-static bool calculate_signalrgb_should_process(void) {
-    if (!srgb_state.user_enabled) return false;
-    if (srgb_state.timed_out) return false;
+static bool calculate_usb_rgb_should_process(void) {
+    if (!usb_rgb_state.user_enabled) return false;
+    if (usb_rgb_state.timed_out) return false;
     return true;
 }
+
+static void usb_rgb_mode_disable(void) {
+#    ifdef SIGNALRGB_ENABLE
+    signalrgb_mode_disable();
+#    endif
+#    ifdef OPENRGB_ENABLE
+    openrgb_mode_disable();
+#    endif
+}
+
+static void usb_rgb_mode_enable(void) {
+#    ifdef SIGNALRGB_ENABLE
+    signalrgb_mode_enable();
+#    endif
+#    ifdef OPENRGB_ENABLE
+    openrgb_mode_enable();
+#    endif
+}
+
 #endif
 
 // Register activity and restore brightness if dimmed
@@ -123,14 +139,14 @@ void keyboard_post_init_shared(void) {
     // Load indicator brightness from EEPROM
     indicator_brightness = eeconfig_read_user();
 
-#ifdef SIGNALRGB_ENABLE
+#ifdef USB_RGB_ENABLE
     // Initialize SignalRGB control state
-    srgb_state.user_enabled  = true;
-    srgb_state.timed_out     = false;
-    srgb_state.last_activity = timer_read32();
+    usb_rgb_state.user_enabled  = true;
+    usb_rgb_state.timed_out     = false;
+    usb_rgb_state.last_activity = timer_read32();
 
     // Enable SignalRGB mode (required for RGB matrix to render SignalRGB colors)
-    signalrgb_mode_enable();
+    usb_rgb_mode_enable();
 #endif
 }
 
@@ -146,17 +162,15 @@ void matrix_scan_shared(void) {
         }
     }
 
-#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+#if defined(USB_RGB_ENABLE)
     // Check for SignalRGB timeout (immediate state update)
     // Only check timeout if we've received data before (last_activity != 0)
-    if (!srgb_state.timed_out && srgb_state.last_activity != 0 && timer_elapsed32(srgb_state.last_activity) > 300) {
-        uprintf("OpenRGB timeout");
-        srgb_state.timed_out = true;
-        signalrgb_mode_disable();
+    if (!usb_rgb_state.timed_out && usb_rgb_state.last_activity != 0 && timer_elapsed32(usb_rgb_state.last_activity) > 300) {
+        usb_rgb_state.timed_out = true;
     }
 
-    bool should_process                           = calculate_signalrgb_should_process();
-    indicator_library[INDICATOR_SIGNALRGB].active = srgb_state.user_enabled && !should_process;
+    bool should_process                           = calculate_usb_rgb_should_process();
+    indicator_library[INDICATOR_SIGNALRGB].active = usb_rgb_state.user_enabled && !should_process;
 #endif
 }
 
@@ -227,25 +241,25 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             break;
         case UG_SRGB:
             if (record->event.pressed) {
-#ifdef SIGNALRGB_ENABLE
-                srgb_state.user_enabled = !srgb_state.user_enabled;
+#ifdef USB_RGB_ENABLE
+                usb_rgb_state.user_enabled = !usb_rgb_state.user_enabled;
 
-                if (srgb_state.user_enabled) {
+                if (usb_rgb_state.user_enabled) {
                     // When enabling, reset timeout tracking and enable RGB matrix mode
-                    srgb_state.last_activity = timer_read32();
-                    srgb_state.timed_out     = false;
-                    signalrgb_mode_enable(); // Enable RGB matrix SignalRGB mode
+                    usb_rgb_state.last_activity = timer_read32();
+                    usb_rgb_state.timed_out     = false;
+                    usb_rgb_mode_enable(); // Enable RGB matrix SignalRGB mode
                 } else {
-                    signalrgb_mode_disable();
+                    usb_rgb_mode_disable();
                 }
 #endif
             }
             return false;
 
         case UG_ANIM1:
-#ifdef SIGNALRGB_ENABLE
+#ifdef USB_RGB_ENABLE
             // Check real-time state (not cached) so first press after unblocking works
-            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
+            if (calculate_usb_rgb_should_process()) {
                 if (record->event.pressed) {
                     tap_code16(S(C(A(G(KC_Z)))));
                 }
@@ -280,8 +294,8 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
 
         case UG_VALU:
             // Check real-time state (not cached) so first press after unblocking works
-#ifdef SIGNALRGB_ENABLE
-            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
+#ifdef USB_RGB_ENABLE
+            if (calculate_usb_rgb_should_process()) {
                 if (record->event.pressed) {
                     tap_code16(S(C(A(G(KC_EQL)))));
                 }
@@ -301,8 +315,8 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
 
         case UG_VALD:
             // Check real-time state (not cached) so first press after unblocking works
-#ifdef SIGNALRGB_ENABLE
-            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
+#ifdef USB_RGB_ENABLE
+            if (calculate_usb_rgb_should_process()) {
                 if (record->event.pressed) {
                     tap_code16(S(C(A(G(KC_MINS)))));
                 }
@@ -322,10 +336,10 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             }
             return false;
 
-#ifdef SIGNALRGB_ENABLE
+#ifdef USB_RGB_ENABLE
         case UG_NEXT:
             // Check real-time state (not cached) so first press after unblocking works
-            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
+            if (calculate_usb_rgb_should_process()) {
                 if (record->event.pressed) {
                     tap_code16(S(C(A(G(KC_Q)))));
                 }
@@ -336,7 +350,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
 
         case UG_PREV:
             // Check real-time state (not cached) so first press after unblocking works
-            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
+            if (calculate_usb_rgb_should_process()) {
                 if (record->event.pressed) {
                     tap_code16(S(C(A(G(KC_A)))));
                 }
@@ -448,13 +462,14 @@ void leader_end_shared(void) {
 }
 
 #if defined(VIA_ENABLE)
-#    if defined(SIGNALRGB_ENABLE)
+#    if defined(USB_RGB_ENABLE)
+#        if defined(SIGNALRGB_ENABLE)
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
-#    endif
+#        endif
 
 bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
     switch (data[0]) {
-#    if defined(SIGNALRGB_ENABLE)
+#        if defined(SIGNALRGB_ENABLE)
         // SIGNALRGB
         case GET_QMK_VERSION:
         case GET_PROTOCOL_VERSION:
@@ -465,8 +480,8 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
         case GET_TOTAL_LEDS:
         case GET_FIRMWARE_TYPE:
             break;
-#    endif
-#    if defined(OPENRGB_ENABLE)
+#        endif
+#        if defined(OPENRGB_ENABLE)
         // OPENRGB
         case OPENRGB_GET_PROTOCOL_VERSION:
         case OPENRGB_GET_QMK_VERSION:
@@ -478,39 +493,40 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
         case OPENRGB_DIRECT_MODE_SET_SINGLE_LED:
         case OPENRGB_DIRECT_MODE_SET_LEDS:
             break;
-#    endif
+#        endif
         default:
             return false;
     }
 
-    srgb_state.last_activity = timer_read32();
+    usb_rgb_state.last_activity = timer_read32();
 
     // Clear timeout flag when receiving data
-    if (srgb_state.timed_out) {
-        srgb_state.timed_out = false;
+    if (usb_rgb_state.timed_out) {
+        usb_rgb_state.timed_out = false;
     }
 
     // Process SignalRGB HID messages if user hasn't disabled it
-    if (calculate_signalrgb_should_process()) {
-#    if defined(SIGNALRGB_ENABLE)
+    if (calculate_usb_rgb_should_process()) {
+#        if defined(SIGNALRGB_ENABLE)
         if (srgb_raw_hid_rx(data, length)) {
             // Track USB activity for inactivity dimming
-            srgb_state.mode = SIGNALRGB;
+            usb_rgb_state.mode = SIGNALRGB;
             register_activity();
             return true;
         }
-#    endif
-#    if defined(OPENRGB_ENABLE)
+#        endif
+#        if defined(OPENRGB_ENABLE)
         if (openrgb_raw_hid_receive(data, length)) {
-            srgb_state.mode = OPENRGB;
+            usb_rgb_state.mode = OPENRGB;
             register_activity();
             return true;
         }
-#    endif
+#        endif
     }
 
     return false;
 }
+#    endif
 #endif
 
 // Helper function for keymaps to set the active FN layer

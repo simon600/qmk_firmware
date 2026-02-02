@@ -1,6 +1,11 @@
 #pragma once
 
 #include "quantum.h"
+// --- USB RGB ENABLE ---
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+#    define USB_RGB_ENABLE
+#endif
+
 #ifdef SIGNALRGB_ENABLE
 #    include "signalrgb.h"
 #endif
@@ -69,13 +74,13 @@ enum rgb_usb_mode {
     OPENRGB   = 2,
 };
 
-#ifdef SIGNALRGB_ENABLE
+#ifdef USB_RGB_ENABLE
 typedef struct {
     uint32_t last_activity; // Last HID activity timestamp
-    bool     timed_out;     // Whether SignalRGB has timed out
-    bool     user_enabled;  // Whether user has enabled SignalRGB via toggle
+    bool     timed_out;     // Whether SignalRGB/OpenRGB has timed out
+    bool     user_enabled;  // Whether user has enabled USB RGB via toggle
     uint8_t  mode;
-} signalrgb_state_t;
+} usb_rgb_state_t;
 #endif
 
 // --- GLOBAL INDICATOR REGISTRY ---
@@ -109,7 +114,7 @@ void leader_end_shared(void);
 bool dynamic_macro_record_start_shared(int8_t direction);
 bool dynamic_macro_record_end_shared(int8_t direction);
 
-#if defined(VIA_ENABLE) && defined(SIGNALRGB_ENABLE)
+#if defined(VIA_ENABLE) && defined(USB_RGB_ENABLE)
 // VIA command handling
 bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length);
 #endif

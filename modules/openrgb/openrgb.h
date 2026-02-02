@@ -42,7 +42,9 @@ enum openrgb_responses {
 };
 
 extern rgb_led_t g_openrgb_direct_mode_colors[RGB_MATRIX_LED_COUNT];
-rgb_led_t        openrgb_get_color(uint8_t led_id);
+
+void openrgb_mode_enable(void);
+void openrgb_mode_disable(void);
 
 bool openrgb_raw_hid_receive(uint8_t *data, uint8_t length);
 void openrgb_get_protocol_version(void);

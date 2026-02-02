@@ -398,6 +398,16 @@ void openrgb_direct_mode_set_leds(uint8_t *data) {
     }
 }
 
-rgb_led_t openrgb_get_color(uint8_t led_id) {
-    return g_openrgb_direct_mode_colors[led_id];
+void openrgb_mode_enable(void) {
+#if defined(RGB_MATRIX_ENABLE)
+    rgb_matrix_mode_noeeprom(RGB_MATRIX_CUSTOM_OPENRGB_DIRECT);
+#endif
+}
+
+void openrgb_mode_disable(void) {
+#if defined(RGBLIGHT_ENABLE)
+    rgblight_reload_from_eeprom();
+#elif defined(RGB_MATRIX_ENABLE)
+    rgb_matrix_reload_from_eeprom();
+#endif
 }
