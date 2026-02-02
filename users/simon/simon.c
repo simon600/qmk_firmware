@@ -148,7 +148,6 @@ void matrix_scan_shared(void) {
     // Only check timeout if we've received data before (last_activity != 0)
     if (!srgb_state.timed_out && srgb_state.last_activity != 0 && timer_elapsed32(srgb_state.last_activity) > 300) {
         srgb_state.timed_out = true;
-        signalrgb_mode_disable();
     }
 
     bool should_process = calculate_signalrgb_should_process();
