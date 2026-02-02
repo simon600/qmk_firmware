@@ -108,3 +108,4 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length);
 indicator_t *get_indicators(void);
 uint8_t      get_active_fn_layer(void);
 void         set_active_fn_layer(uint8_t layer);
+bool         get_signalrgb_user_enabled(void);
