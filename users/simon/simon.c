@@ -250,14 +250,12 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 return false;
             }
             // Let QMK handle it when SignalRGB is disabled
-            return true;
-#else
+#endif
             if (record->event.pressed) {
                 rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
                 rgb_matrix_sethsv(156, 191, 255);
             }
             return false;
-#endif
 
         case UG_ANIM2:
         case UG_ANIM3:
@@ -393,16 +391,6 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
     if (is_dimmed) {
         return true;
     }
-
-#ifdef SIGNALRGB_ENABLE
-    // Apply SignalRGB colors first if processing (base layer)
-    if (calculate_signalrgb_should_process()) {
-        for (uint8_t i = led_min; i < led_max; i++) {
-            rgb_led_t color = signalrgb_get_color(i);
-            rgb_matrix_set_color(i, color.r, color.g, color.b);
-        }
-    }
-#endif
 
     // Show FN layer mask if FN layer is active (override layer)
     if (active_fn_layer != 0) {
