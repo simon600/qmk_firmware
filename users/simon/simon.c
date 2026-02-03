@@ -10,10 +10,9 @@ static bool    rgb_adjusted_in_fn = false; // Whether RGB was adjusted while in 
 static uint8_t active_fn_layer    = 0;     // Which FN layer is active (0 if none)
 
 // Inactivity dimming state (5-minute timeout)
-static uint32_t last_activity_time   = 0;     // Last keyboard activity timestamp
-static bool     is_dimmed            = false; // Whether brightness has been dimmed
-static uint8_t  saved_brightness     = 0;     // Original brightness before dimming
-static uint8_t  indicator_brightness = 255;   // Indicator specific brightness
+static dimming_state_t dimming_state;
+
+static uint8_t indicator_brightness = 255; // Indicator specific brightness
 
 #define MIN_SAFE_BRIGHTNESS 50
 #ifndef RGB_MATRIX_VAL_STEP
@@ -54,12 +53,16 @@ static bool calculate_signalrgb_should_process(void) {
 
 // Register activity and restore brightness if dimmed
 static void register_activity(void) {
-    last_activity_time = timer_read32();
+    dimming_state.last_activity_time = timer_read32();
 
     // Restore brightness only if we actually saved a valid brightness value
-    if (is_dimmed && saved_brightness > 0) {
-        rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), saved_brightness);
-        is_dimmed = false;
+    if (dimming_state.is_dimmed) {
+        if (dimming_state.saved_brightness > 0) {
+            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), dimming_state.saved_brightness);
+        }
+        rgb_matrix_mode_noeeprom(dimming_state.saved_mode);
+
+        dimming_state.is_dimmed = false;
     }
 }
 
@@ -113,9 +116,10 @@ void keyboard_post_init_shared(void) {
     rgb_adjusted_in_fn = false;
 
     // Initialize inactivity dimming
-    last_activity_time = timer_read32();
-    is_dimmed          = false;
-    saved_brightness   = 0;
+    dimming_state.last_activity_time = timer_read32();
+    dimming_state.is_dimmed          = false;
+    dimming_state.saved_brightness   = 0;
+    dimming_state.saved_mode         = RGB_MATRIX_SOLID_COLOR;
 
     // Load indicator brightness from EEPROM
     indicator_brightness = eeconfig_read_user();
@@ -133,13 +137,17 @@ void keyboard_post_init_shared(void) {
 
 void matrix_scan_shared(void) {
     // Check for inactivity timeout
-    uint32_t elapsed = timer_elapsed32(last_activity_time);
-    if (!is_dimmed && elapsed > INACTIVITY_TIMEOUT_MS) {
+    uint32_t elapsed = timer_elapsed32(dimming_state.last_activity_time);
+    if (!dimming_state.is_dimmed && elapsed > INACTIVITY_TIMEOUT_MS) {
         // Save current brightness and dim to minimum (val=16, just above off)
-        saved_brightness = rgb_matrix_get_val();
-        if (saved_brightness > 1) { // Only dim if brightness is above minimum
-            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS);
-            is_dimmed = true;
+        dimming_state.saved_brightness = rgb_matrix_get_val();
+        dimming_state.saved_mode       = rgb_matrix_get_mode();
+
+        dimming_state.is_dimmed = true;
+        // Important to reload last effect from eeprom before dimming
+        rgb_matrix_reload_from_eeprom();                            // Reloading last effect from eeprom
+        if (dimming_state.saved_brightness > MIN_SAFE_BRIGHTNESS) { // Only dim if brightness is above minimum
+            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 1);
         }
     }
 
@@ -391,7 +399,7 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
         }
     }
 
-    if (is_dimmed) {
+    if (dimming_state.is_dimmed) {
         return true;
     }
 
@@ -446,6 +454,12 @@ void leader_end_shared(void) {
 
     if (leader_sequence_one_key(KC_E)) {
         SEND_STRING("szymek.fogiel@gmail.com");
+    } else if (leader_sequence_two_keys(KC_E, KC_W)) {
+        SEND_STRING("szymonf@google.com");
+    } else if (leader_sequence_one_key(KC_T)) {
+        SEND_STRING("+41778150320");
+    } else if (leader_sequence_two_keys(KC_T, KC_P)) {
+        SEND_STRING("+48732258424");
     }
 }
 

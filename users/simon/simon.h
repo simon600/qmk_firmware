@@ -60,6 +60,13 @@ typedef struct {
     rgb_led_t color;     // RGB color value
 } indicator_t;
 
+typedef struct {
+    uint32_t last_activity_time;
+    bool     is_dimmed;
+    uint8_t  saved_brightness;
+    uint8_t  saved_mode;
+} dimming_state_t;
+
 #ifdef SIGNALRGB_ENABLE
 typedef struct {
     uint32_t last_activity; // Last HID activity timestamp
