@@ -193,3 +193,11 @@ bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
     return via_command_shared(src, data, length);
 }
 #endif
+
+void suspend_power_down_user(void) {
+    suspend_power_down_shared();
+}
+
+void suspend_wakeup_init_user(void) {
+    suspend_wakeup_init_shared();
+}

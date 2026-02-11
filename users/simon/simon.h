@@ -111,6 +111,10 @@ bool dynamic_macro_record_end_shared(int8_t direction);
 bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length);
 #endif
 
+// Suspend callbacks
+void suspend_power_down_shared(void);
+void suspend_wakeup_init_shared(void);
+
 // State access (for keymap-specific logic if needed)
 indicator_t *get_indicators(void);
 uint8_t      get_active_fn_layer(void);
