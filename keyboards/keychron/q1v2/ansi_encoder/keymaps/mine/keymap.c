@@ -169,3 +169,10 @@ bool dynamic_macro_record_end_user(int8_t direction) {
     return dynamic_macro_record_end_shared(direction);
 }
 
+void suspend_power_down_user(void) {
+    suspend_power_down_shared();
+}
+
+void suspend_wakeup_init_user(void) {
+    suspend_wakeup_init_shared();
+}

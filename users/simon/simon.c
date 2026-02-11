@@ -11,6 +11,7 @@ static uint8_t active_fn_layer    = 0;     // Which FN layer is active (0 if non
 
 // Inactivity dimming state (5-minute timeout)
 static dimming_state_t dimming_state;
+static bool suspended = false; // Suspend state tracker
 
 static uint8_t indicator_brightness = 255; // Indicator specific brightness
 
@@ -136,6 +137,8 @@ void keyboard_post_init_shared(void) {
 }
 
 void matrix_scan_shared(void) {
+    if (suspended) return;
+
     // Check for inactivity timeout
     uint32_t elapsed = timer_elapsed32(dimming_state.last_activity_time);
     if (!dimming_state.is_dimmed && elapsed > INACTIVITY_TIMEOUT_MS) {
@@ -144,11 +147,7 @@ void matrix_scan_shared(void) {
         dimming_state.saved_mode       = rgb_matrix_get_mode();
 
         dimming_state.is_dimmed = true;
-        // Important to reload last effect from eeprom before dimming
-        rgb_matrix_reload_from_eeprom();                            // Reloading last effect from eeprom
-        if (dimming_state.saved_brightness > MIN_SAFE_BRIGHTNESS) { // Only dim if brightness is above minimum
-            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 1);
-        }
+        rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 1);
     }
 
 #ifdef SIGNALRGB_ENABLE
@@ -535,4 +534,18 @@ bool get_signalrgb_user_enabled(void) {
 #else
     return false;
 #endif
+}
+
+void suspend_power_down_shared(void) {
+    suspended = true;
+    if (!dimming_state.is_dimmed) {
+        dimming_state.saved_brightness = rgb_matrix_get_val();
+        dimming_state.saved_mode       = rgb_matrix_get_mode();
+        dimming_state.is_dimmed        = true;
+    }
+}
+
+void suspend_wakeup_init_shared(void) {
+    suspended = false;
+    register_activity();
 }
