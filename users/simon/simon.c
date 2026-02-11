@@ -1,6 +1,9 @@
 #include "simon.h"
 #include "keychron_common.h"
 #include "print.h"
+#ifdef KEYCHRON_RGB_ENABLE
+#    include "keychron_rgb_type.h"
+#endif
 
 // --- COMBO DEFINITIONS ---
 const uint16_t PROGMEM op_combo[]   = {KC_O, KC_P, COMBO_END};
@@ -141,6 +144,14 @@ void keyboard_post_init_shared(void) {
 
     // Enable SignalRGB mode (required for RGB matrix to render SignalRGB colors)
     signalrgb_mode_enable();
+#endif
+
+#ifdef KEYCHRON_RGB_ENABLE
+    // Disable caps_lock and num_lock indicators by default
+    // Keychron Launcher can still re-enable and persist via HID
+    extern os_indicator_config_t os_ind_cfg;
+    os_ind_cfg.disable.caps_lock = false;
+    os_ind_cfg.disable.num_lock  = true;
 #endif
 }
 
