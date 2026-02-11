@@ -18,6 +18,15 @@ enum custom_keycodes_shared {
     SAFE_RANGE_SHARED, // For keymaps to extend
 };
 
+// --- COMBO DEFINITIONS ---
+enum combos {
+    OP_BSPC,
+    IO_DEL,
+    COMBO_COUNT,
+};
+extern const uint16_t PROGMEM op_combo[];
+extern combo_t                key_combos[COMBO_COUNT];
+
 // --- CONSTANTS ---
 // Inactivity timeout: 5 minutes in milliseconds
 #define INACTIVITY_TIMEOUT_MS 300000

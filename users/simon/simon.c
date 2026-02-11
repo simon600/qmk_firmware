@@ -2,6 +2,14 @@
 #include "keychron_common.h"
 #include "print.h"
 
+// --- COMBO DEFINITIONS ---
+const uint16_t PROGMEM op_combo[]   = {KC_O, KC_P, COMBO_END};
+const uint16_t PROGMEM io_combo[]   = {KC_I, KC_O, COMBO_END};
+combo_t                key_combos[] = {
+    [OP_BSPC] = COMBO(op_combo, KC_BSPC),
+    [IO_DEL]  = COMBO(io_combo, KC_DEL),
+};
+
 // --- STATE STORAGE ---
 // Clean separation: Immediate control flags vs. Deferred rendering actions
 
@@ -11,7 +19,7 @@ static uint8_t active_fn_layer    = 0;     // Which FN layer is active (0 if non
 
 // Inactivity dimming state (5-minute timeout)
 static dimming_state_t dimming_state;
-static bool suspended = false; // Suspend state tracker
+static bool            suspended = false; // Suspend state tracker
 
 static uint8_t indicator_brightness = 255; // Indicator specific brightness
 
