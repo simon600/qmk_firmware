@@ -2,3 +2,4 @@ SRC += simon.c
 CAPS_WORD_ENABLE = yes
 LEADER_ENABLE = yes
 DYNAMIC_MACRO_ENABLE = yes
+COMBO_ENABLE = yes

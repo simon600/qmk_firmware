@@ -131,6 +131,22 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     return process_record_shared(keycode, record);
 }
 
+bool combo_should_trigger(uint16_t combo_index, combo_t *combo, uint16_t keycode, keyrecord_t *record) {
+    if (get_highest_layer(layer_state) <= WIN_FN) {
+        return true;
+    }
+    return false;
+    /*switch (combo_index) {
+        case OP_BSPC:
+        case IO_DEL:
+            if (get_highest_layer(layer_state) <= WIN_FN) {
+                return true;
+            }
+            break;
+    }
+    return false;*/
+}
+
 layer_state_t layer_state_set_user(layer_state_t state) {
     bool win_fn_active  = layer_state_cmp(state, WIN_FN);
     bool mac_fn_active  = layer_state_cmp(state, MAC_FN);
