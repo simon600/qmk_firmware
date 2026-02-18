@@ -1,6 +1,7 @@
 #pragma once
 
 #define DYNAMIC_KEYMAP_LAYER_COUNT 6
+#define COMBO_TERM 35
 // --- X-Macro Indicator Registry Configuration ---
 
 // #define KEYBOARD_INDICATOR_IDS
