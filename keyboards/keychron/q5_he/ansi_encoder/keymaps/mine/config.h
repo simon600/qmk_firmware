@@ -2,6 +2,7 @@
 
 // Enable combo_should_trigger to conditionally disable combos on gaming layers
 #define COMBO_SHOULD_TRIGGER
+#define COMBO_TERM 35
 
 // Expand the number of layers to 8
 #define DYNAMIC_KEYMAP_LAYER_COUNT 8
