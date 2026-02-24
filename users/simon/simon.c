@@ -172,7 +172,7 @@ void matrix_scan_shared(void) {
 #ifdef SIGNALRGB_ENABLE
     // Check for SignalRGB timeout (immediate state update)
     // Only check timeout if we've received data before (last_activity != 0)
-    if (!srgb_state.timed_out && srgb_state.last_activity != 0 && timer_elapsed32(srgb_state.last_activity) > 1500) {
+    if (!srgb_state.timed_out && srgb_state.last_activity != 0 && timer_elapsed32(srgb_state.last_activity) > 500) {
         srgb_state.timed_out = true;
     }
     if (srgb_state.user_enabled) {
@@ -504,7 +504,6 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
     // Clear timeout flag when receiving data
     if (srgb_state.timed_out) {
         srgb_state.timed_out = false;
-        signalrgb_mode_enable();
     }
 
     if (!srgb_state.user_enabled && data[0] == SET_SIGNALRGB_MODE_ENABLE) {
