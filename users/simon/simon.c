@@ -24,13 +24,12 @@ static uint8_t active_fn_layer    = 0;     // Which FN layer is active (0 if non
 static dimming_state_t dimming_state;
 static bool            suspended = false; // Suspend state tracker
 
-static uint8_t indicator_brightness = 255; // Indicator specific brightness
+static user_config_t user_config;
 
 #define MIN_SAFE_BRIGHTNESS 50
 #ifndef RGB_MATRIX_VAL_STEP
 #    define RGB_MATRIX_VAL_STEP 8
 #endif
-static bool bg_blackout_mode = false;
 
 #ifdef SIGNALRGB_ENABLE
 // SignalRGB control state - immediate flags that affect SignalRGB calculation
@@ -108,7 +107,11 @@ static void update_mod_led_mask(uint8_t fn_layer) {
 // --- PUBLIC API FUNCTIONS ---
 
 void eeconfig_init_user(void) {
-    eeconfig_update_user(255);
+    user_config.version              = USER_CONFIG_VERSION;
+    user_config.indicator_brightness = 255;
+    user_config.bg_blackout_mode     = false;
+    user_config._reserved            = 0;
+    eeconfig_update_user(user_config.raw);
 }
 
 // State access functions
@@ -133,8 +136,11 @@ void keyboard_post_init_shared(void) {
     dimming_state.saved_brightness   = 0;
     dimming_state.saved_mode         = RGB_MATRIX_SOLID_COLOR;
 
-    // Load indicator brightness from EEPROM
-    indicator_brightness = eeconfig_read_user();
+    // Load user config from EEPROM (with version check)
+    user_config.raw = eeconfig_read_user();
+    if (user_config.version != USER_CONFIG_VERSION) {
+        eeconfig_init_user();
+    }
 
 #ifdef SIGNALRGB_ENABLE
     // Initialize SignalRGB control state
@@ -317,8 +323,9 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
 #endif
             // Let QMK handle it when SignalRGB is disabled
             if (record->event.pressed) {
-                if (bg_blackout_mode) {
-                    bg_blackout_mode = false;
+                if (user_config.bg_blackout_mode) {
+                    user_config.bg_blackout_mode = false;
+                    eeconfig_update_user(user_config.raw);
                     rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP);
                 } else {
                     rgb_matrix_increase_val_noeeprom();
@@ -341,9 +348,13 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 uint8_t current_val = rgb_matrix_get_val();
                 if (current_val <= MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP) {
                     rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS);
-                    bg_blackout_mode = true;
+                    user_config.bg_blackout_mode = true;
+                    eeconfig_update_user(user_config.raw);
                 } else {
-                    bg_blackout_mode = false;
+                    if (user_config.bg_blackout_mode) {
+                        user_config.bg_blackout_mode = false;
+                        eeconfig_update_user(user_config.raw);
+                    }
                     rgb_matrix_decrease_val_noeeprom();
                 }
             }
@@ -379,17 +390,17 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             return true;
         case IND_BR_U:
             if (record->event.pressed) {
-                if (indicator_brightness < 255) {
-                    indicator_brightness = (indicator_brightness + RGB_MATRIX_VAL_STEP > 255) ? 255 : indicator_brightness + RGB_MATRIX_VAL_STEP;
-                    eeconfig_update_user(indicator_brightness);
+                if (user_config.indicator_brightness < 255) {
+                    user_config.indicator_brightness = (user_config.indicator_brightness + RGB_MATRIX_VAL_STEP > 255) ? 255 : user_config.indicator_brightness + RGB_MATRIX_VAL_STEP;
+                    eeconfig_update_user(user_config.raw);
                 }
             }
             return false;
         case IND_BR_D:
             if (record->event.pressed) {
-                if (indicator_brightness > 0) {
-                    indicator_brightness = (indicator_brightness < RGB_MATRIX_VAL_STEP) ? 0 : indicator_brightness - RGB_MATRIX_VAL_STEP;
-                    eeconfig_update_user(indicator_brightness);
+                if (user_config.indicator_brightness > 0) {
+                    user_config.indicator_brightness = (user_config.indicator_brightness < RGB_MATRIX_VAL_STEP) ? 0 : user_config.indicator_brightness - RGB_MATRIX_VAL_STEP;
+                    eeconfig_update_user(user_config.raw);
                 }
             }
             return false;
@@ -410,7 +421,7 @@ layer_state_t layer_state_set_shared(layer_state_t state) {
 }
 
 bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
-    if (bg_blackout_mode) {
+    if (user_config.bg_blackout_mode) {
         for (uint8_t i = led_min; i < led_max; i++) {
             rgb_matrix_set_color(i, 0, 0, 0);
         }
@@ -426,7 +437,7 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
             if (i < RGB_MATRIX_LED_COUNT) {
                 if (mod_led_mask[i]) {
                     // Scale brightness
-                    uint8_t v = (255 * (uint16_t)indicator_brightness) / 255;
+                    uint8_t v = (255 * (uint16_t)user_config.indicator_brightness) / 255;
                     rgb_matrix_set_color(i, v, v, v);
                 } else if (!rgb_adjusted_in_fn) {
                     // Only black out if RGB hasn't been adjusted
@@ -442,9 +453,9 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
         if (indicator_library[i].active && indicator_library[i].led_index != 255) {
             // Scale brightness
             // Basic approximation: scale each component by the brightness ratio
-            uint8_t r = (indicator_library[i].color.r * (uint16_t)indicator_brightness) / 255;
-            uint8_t g = (indicator_library[i].color.g * (uint16_t)indicator_brightness) / 255;
-            uint8_t b = (indicator_library[i].color.b * (uint16_t)indicator_brightness) / 255;
+            uint8_t r = (indicator_library[i].color.r * (uint16_t)user_config.indicator_brightness) / 255;
+            uint8_t g = (indicator_library[i].color.g * (uint16_t)user_config.indicator_brightness) / 255;
+            uint8_t b = (indicator_library[i].color.b * (uint16_t)user_config.indicator_brightness) / 255;
             rgb_matrix_set_color(indicator_library[i].led_index, r, g, b);
         }
     }
