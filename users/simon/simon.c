@@ -248,7 +248,8 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
         case (QK_DYNAMIC_MACRO_RECORD_START_2):
             update_led_index(INDICATOR_MACRO_REC, record);
             break;
-        case RALT_T(KC_NO):
+        case LALT_T(KC_NO):
+        case GUI_T(KC_NO):
             update_led_index(INDICATOR_LEADER, record);
             if (record->tap.count > 0) {
                 if (!record->event.pressed) { // Trigger on release for better accuracy
