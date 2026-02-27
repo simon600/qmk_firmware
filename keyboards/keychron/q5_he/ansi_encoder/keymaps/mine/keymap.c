@@ -15,6 +15,10 @@ enum layers {
     HARDWARE2,
 };
 
+enum keymap_keycodes {
+    TG_GMG = SAFE_RANGE_SHARED,
+};
+
 #define FN_MAC MO(MAC_FN)
 #define FN_WIN MO(WIN_FN)
 #define FN_LMAC LT(MAC_FN, KC_NO)
@@ -23,7 +27,6 @@ enum layers {
 #define GUI_LEAD GUI_T(KC_NO)
 #define FN_HRD MO(HARDWARE)
 #define FN_HRD2 MO(HARDWARE2)
-#define TG_GMG TG(GAMING)
 #define FN_GMG2 MO(GAMING2)
 #define MR1 QK_DYNAMIC_MACRO_RECORD_START_1
 #define MR2 QK_DYNAMIC_MACRO_RECORD_START_2
@@ -31,7 +34,8 @@ enum layers {
 #define MP2 QK_DYNAMIC_MACRO_PLAY_2
 #define MS QK_DYNAMIC_MACRO_RECORD_STOP
 
-bool gaming_mode_enabled = false;
+bool           gaming_mode_enabled  = false;
+static uint8_t gaming_profile_state = 0; // 0=off, 1=profile1(red), 2=profile2(green)
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -130,6 +134,23 @@ void matrix_scan_user(void) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (keycode == TG_GMG && record->event.pressed) {
+        if (!layer_state_is(GAMING)) {
+            // Not in gaming layer: turn it on, profile 1
+            layer_on(GAMING);
+        } else if (gaming_profile_state == 1) {
+            // First press in gaming layer: switch to profile 2 (green)
+            gaming_profile_state = 2;
+            profile_select(2, false);
+            indicator_t *indicators            = get_indicators();
+            indicators[INDICATOR_GAMING].color = (rgb_led_t){0, 255, 0};
+        } else {
+            // Second press in gaming layer: turn off
+            gaming_profile_state = 0;
+            layer_off(GAMING);
+        }
+        return false;
+    }
     return process_record_shared(keycode, record);
 }
 
@@ -156,8 +177,14 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     bool gaming_active  = layer_state_cmp(state, GAMING);
 
     if (!gaming_mode_enabled && gaming_active) {
+        // Layer just turned on: set profile 1 and reset indicator to red
+        gaming_profile_state = 1;
         profile_select(1, false);
+        indicator_t *indicators            = get_indicators();
+        indicators[INDICATOR_GAMING].color = (rgb_led_t){255, 0, 0};
     } else if (gaming_mode_enabled && !gaming_active) {
+        // Layer just turned off: reset to profile 0
+        gaming_profile_state = 0;
         profile_select(0, false);
     }
     gaming_mode_enabled = gaming_active;
