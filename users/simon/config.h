@@ -1,0 +1,5 @@
+#pragma once
+
+#define COMBO_TERM 25
+#define LEADER_PER_KEY_TIMING
+#define LEADER_TIMEOUT 250
