@@ -27,6 +27,7 @@ static bool            suspended = false; // Suspend state tracker
 static user_config_t user_config;
 
 #define MIN_SAFE_BRIGHTNESS 50
+#define MIN_INDICATOR_BRIGHTNESS 16
 #ifndef RGB_MATRIX_VAL_STEP
 #    define RGB_MATRIX_VAL_STEP 8
 #endif
@@ -331,6 +332,10 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 } else {
                     rgb_matrix_increase_val_noeeprom();
                 }
+                // Sync indicator brightness to keyboard brightness (with floor)
+                uint8_t new_val = rgb_matrix_get_val();
+                user_config.indicator_brightness = new_val < MIN_INDICATOR_BRIGHTNESS ? MIN_INDICATOR_BRIGHTNESS : new_val;
+                eeconfig_update_user(user_config.raw);
             }
             return false;
 
@@ -358,6 +363,10 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                     }
                     rgb_matrix_decrease_val_noeeprom();
                 }
+                // Sync indicator brightness to keyboard brightness (with floor)
+                uint8_t new_val = rgb_matrix_get_val();
+                user_config.indicator_brightness = new_val < MIN_INDICATOR_BRIGHTNESS ? MIN_INDICATOR_BRIGHTNESS : new_val;
+                eeconfig_update_user(user_config.raw);
             }
             return false;
 
@@ -432,13 +441,24 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
         return true;
     }
 
+    // Determine indicator brightness based on SignalRGB state
+#ifdef SIGNALRGB_ENABLE
+    uint8_t ind_brightness = calculate_signalrgb_should_process() ? signalrgb_get_max_brightness() : user_config.indicator_brightness;
+#else
+    uint8_t ind_brightness = user_config.indicator_brightness;
+#endif
+    // Enforce minimum indicator brightness unless user manually set it lower via IND_BR_D
+    if (ind_brightness < MIN_INDICATOR_BRIGHTNESS && user_config.indicator_brightness >= MIN_INDICATOR_BRIGHTNESS) {
+        ind_brightness = MIN_INDICATOR_BRIGHTNESS;
+    }
+
     // Show FN layer mask if FN layer is active (override layer)
     if (active_fn_layer != 0) {
         for (uint8_t i = led_min; i < led_max; i++) {
             if (i < RGB_MATRIX_LED_COUNT) {
                 if (mod_led_mask[i]) {
                     // Scale brightness
-                    uint8_t v = (255 * (uint16_t)user_config.indicator_brightness) / 255;
+                    uint8_t v = (255 * (uint16_t)ind_brightness) / 255;
                     rgb_matrix_set_color(i, v, v, v);
                 } else if (!rgb_adjusted_in_fn) {
                     // Only black out if RGB hasn't been adjusted
@@ -454,9 +474,9 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
         if (indicator_library[i].active && indicator_library[i].led_index != 255) {
             // Scale brightness
             // Basic approximation: scale each component by the brightness ratio
-            uint8_t r = (indicator_library[i].color.r * (uint16_t)user_config.indicator_brightness) / 255;
-            uint8_t g = (indicator_library[i].color.g * (uint16_t)user_config.indicator_brightness) / 255;
-            uint8_t b = (indicator_library[i].color.b * (uint16_t)user_config.indicator_brightness) / 255;
+            uint8_t r = (indicator_library[i].color.r * (uint16_t)ind_brightness) / 255;
+            uint8_t g = (indicator_library[i].color.g * (uint16_t)ind_brightness) / 255;
+            uint8_t b = (indicator_library[i].color.b * (uint16_t)ind_brightness) / 255;
             rgb_matrix_set_color(indicator_library[i].led_index, r, g, b);
         }
     }
