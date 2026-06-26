@@ -111,7 +111,7 @@ void eeconfig_init_user(void) {
     user_config.version              = USER_CONFIG_VERSION;
     user_config.indicator_brightness = 255;
     user_config.bg_blackout_mode     = false;
-    user_config._reserved            = 0;
+    user_config.ext_rgb_enabled      = true;
     eeconfig_update_user(user_config.raw);
 }
 
@@ -145,19 +145,27 @@ void keyboard_post_init_shared(void) {
 
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
     // Initialize external RGB control state
-    ext_rgb_state.user_enabled  = true;
+    ext_rgb_state.user_enabled  = user_config.ext_rgb_enabled;
     ext_rgb_state.timed_out     = false;
     ext_rgb_state.last_activity = timer_read32();
     ext_rgb_state.active_source = EXT_RGB_NONE;
 
-    // Enable external RGB mode
+    // Enable external RGB mode if user enabled it
+    if (ext_rgb_state.user_enabled) {
 #    if defined(SIGNALRGB_ENABLE)
-    signalrgb_mode_enable();
-    ext_rgb_state.active_source = EXT_RGB_SIGNALRGB;
+        signalrgb_mode_enable();
+        ext_rgb_state.active_source = EXT_RGB_SIGNALRGB;
 #    elif defined(OPENRGB_ENABLE)
-    openrgb_mode_enable();
-    ext_rgb_state.active_source = EXT_RGB_OPENRGB;
+        openrgb_mode_enable();
+        ext_rgb_state.active_source = EXT_RGB_OPENRGB;
 #    endif
+    } else {
+#    if defined(SIGNALRGB_ENABLE)
+        signalrgb_mode_disable();
+#    elif defined(OPENRGB_ENABLE)
+        openrgb_mode_disable();
+#    endif
+    }
 #endif
 
 #ifdef KEYCHRON_RGB_ENABLE
@@ -284,6 +292,8 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             if (record->event.pressed) {
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
                 ext_rgb_state.user_enabled = !ext_rgb_state.user_enabled;
+                user_config.ext_rgb_enabled = ext_rgb_state.user_enabled;
+                eeconfig_update_user(user_config.raw);
 
                 if (ext_rgb_state.user_enabled) {
                     // When enabling, reset timeout tracking and enable RGB matrix mode
@@ -594,18 +604,16 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
     // --- OpenRGB commands (0x01–0x09) ---
 #ifdef OPENRGB_ENABLE
     if (data[0] >= 0x01 && data[0] <= 0x09) {
+        if (!ext_rgb_state.user_enabled) {
+            return false;
+        }
+
         ext_rgb_state.last_activity = timer_read32();
         ext_rgb_state.active_source = EXT_RGB_OPENRGB;
 
         if (ext_rgb_state.timed_out) {
             ext_rgb_state.timed_out = false;
-            if (ext_rgb_state.user_enabled) {
-                openrgb_mode_enable();
-            }
-        }
-
-        if (!ext_rgb_state.user_enabled && data[0] == QMK_OPENRGB_SET_MODE && data[4] == 25) {
-            return false;
+            openrgb_mode_enable();
         }
 
         if (openrgb_raw_hid_rx(data, length)) {

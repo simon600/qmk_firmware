@@ -97,7 +97,7 @@ typedef struct {
 
 // --- EEPROM USER CONFIG ---
 // Packed into eeconfig_read_user()/eeconfig_update_user() 32-bit slot
-#define USER_CONFIG_VERSION 1
+#define USER_CONFIG_VERSION 2
 
 typedef union {
     uint32_t raw;
@@ -105,9 +105,10 @@ typedef union {
         uint8_t version;              // byte 0: data version id
         uint8_t indicator_brightness; // byte 1
         bool    bg_blackout_mode;     // byte 2
-        uint8_t _reserved;            // byte 3: future use
+        bool    ext_rgb_enabled;      // byte 3
     };
 } user_config_t;
+
 
 // --- GLOBAL INDICATOR REGISTRY ---
 extern indicator_t indicator_library[INDICATOR_COUNT];
