@@ -4,6 +4,9 @@
 #ifdef SIGNALRGB_ENABLE
 #    include "signalrgb.h"
 #endif
+#ifdef OPENRGB_ENABLE
+#    include "openrgb.h"
+#endif
 
 // --- CUSTOM KEYCODES ---
 enum custom_keycodes_shared {
@@ -34,18 +37,18 @@ enum custom_keycodes_shared {
 
 // --- INDICATOR REGISTRY (X-Macro System) ---
 
-// Helper macro for conditional SignalRGB indicator
-#if defined(SIGNALRGB_ENABLE)
-#    define IF_SIGNALRGB_ENABLED(x) x
+// Helper macro for conditional external RGB indicator
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+#    define IF_EXT_RGB_ENABLED(x) x
 #else
-#    define IF_SIGNALRGB_ENABLED(x)
+#    define IF_EXT_RGB_ENABLED(x)
 #endif
 
 // Universal indicators available in userspace
 #define SHARED_INDICATOR_IDS \
     X(INDICATOR_MACRO_REC)   \
     X(INDICATOR_LEADER)      \
-    IF_SIGNALRGB_ENABLED(X(INDICATOR_SIGNALRGB))
+    IF_EXT_RGB_ENABLED(X(INDICATOR_SIGNALRGB))
 
 // Allow keyboards to extend with their own indicators
 #ifndef KEYBOARD_INDICATOR_IDS
@@ -77,12 +80,19 @@ typedef struct {
     uint8_t  saved_mode;
 } dimming_state_t;
 
-#ifdef SIGNALRGB_ENABLE
+typedef enum {
+    EXT_RGB_NONE,
+    EXT_RGB_SIGNALRGB,
+    EXT_RGB_OPENRGB,
+} ext_rgb_source_t;
+
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
 typedef struct {
-    uint32_t last_activity; // Last HID activity timestamp
-    bool     timed_out;     // Whether SignalRGB has timed out
-    bool     user_enabled;  // Whether user has enabled SignalRGB via toggle
-} signalrgb_state_t;
+    uint32_t         last_activity; // Last HID activity timestamp
+    bool             timed_out;     // Whether external RGB has timed out
+    bool             user_enabled;  // Whether user has enabled external RGB via toggle
+    ext_rgb_source_t active_source; // Which source is active (SignalRGB or OpenRGB)
+} ext_rgb_state_t;
 #endif
 
 // --- EEPROM USER CONFIG ---
@@ -130,7 +140,7 @@ void leader_end_shared(void);
 bool dynamic_macro_record_start_shared(int8_t direction);
 bool dynamic_macro_record_end_shared(int8_t direction);
 
-#if defined(VIA_ENABLE) && defined(SIGNALRGB_ENABLE)
+#if defined(VIA_ENABLE) && (defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE))
 // VIA command handling
 bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length);
 #endif
@@ -144,3 +154,4 @@ indicator_t *get_indicators(void);
 uint8_t      get_active_fn_layer(void);
 void         set_active_fn_layer(uint8_t layer);
 bool         get_signalrgb_user_enabled(void);
+

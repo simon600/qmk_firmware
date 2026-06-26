@@ -32,9 +32,9 @@ static user_config_t user_config;
 #    define RGB_MATRIX_VAL_STEP 8
 #endif
 
-#ifdef SIGNALRGB_ENABLE
-// SignalRGB control state - immediate flags that affect SignalRGB calculation
-static signalrgb_state_t srgb_state = {0};
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+// External RGB control state - immediate flags that affect external RGB calculation
+static ext_rgb_state_t ext_rgb_state = {0};
 #endif
 
 // --- COMPILE-TIME INDICATOR REGISTRY ---
@@ -53,12 +53,12 @@ static bool mod_led_mask[RGB_MATRIX_LED_COUNT];
 
 // --- STATE MANAGEMENT FUNCTIONS ---
 
-#ifdef SIGNALRGB_ENABLE
-// Calculate whether SignalRGB should process LED updates (ALWAYS COMPUTED, NEVER CACHED)
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+// Calculate whether external RGB should process LED updates (ALWAYS COMPUTED, NEVER CACHED)
 // This is derived from immediate control state and should be called fresh each time
-static bool calculate_signalrgb_should_process(void) {
-    if (!srgb_state.user_enabled) return false;
-    if (srgb_state.timed_out) return false;
+static bool calculate_ext_rgb_should_process(void) {
+    if (!ext_rgb_state.user_enabled) return false;
+    if (ext_rgb_state.timed_out) return false;
     return true;
 }
 #endif
@@ -143,14 +143,21 @@ void keyboard_post_init_shared(void) {
         eeconfig_init_user();
     }
 
-#ifdef SIGNALRGB_ENABLE
-    // Initialize SignalRGB control state
-    srgb_state.user_enabled  = true;
-    srgb_state.timed_out     = false;
-    srgb_state.last_activity = timer_read32();
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+    // Initialize external RGB control state
+    ext_rgb_state.user_enabled  = true;
+    ext_rgb_state.timed_out     = false;
+    ext_rgb_state.last_activity = timer_read32();
+    ext_rgb_state.active_source = EXT_RGB_NONE;
 
-    // Enable SignalRGB mode (required for RGB matrix to render SignalRGB colors)
+    // Enable external RGB mode
+#    if defined(SIGNALRGB_ENABLE)
     signalrgb_mode_enable();
+    ext_rgb_state.active_source = EXT_RGB_SIGNALRGB;
+#    elif defined(OPENRGB_ENABLE)
+    openrgb_mode_enable();
+    ext_rgb_state.active_source = EXT_RGB_OPENRGB;
+#    endif
 #endif
 
 #ifdef KEYCHRON_RGB_ENABLE
@@ -176,19 +183,30 @@ void matrix_scan_shared(void) {
         rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), 1);
     }
 
-#ifdef SIGNALRGB_ENABLE
-    // Check for SignalRGB timeout (immediate state update)
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+    // Check for external RGB timeout (immediate state update)
     // Only check timeout if we've received data before (last_activity != 0)
-    if (!srgb_state.timed_out && srgb_state.last_activity != 0 && timer_elapsed32(srgb_state.last_activity) > 500) {
-        srgb_state.timed_out = true;
-        if (srgb_state.user_enabled) {
-            signalrgb_mode_disable();
+    if (!ext_rgb_state.timed_out && ext_rgb_state.last_activity != 0 &&
+        ext_rgb_state.active_source == EXT_RGB_SIGNALRGB &&
+        rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB &&
+        timer_elapsed32(ext_rgb_state.last_activity) > 500) {
+        ext_rgb_state.timed_out = true;
+        if (ext_rgb_state.user_enabled) {
+            if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
+#    ifdef OPENRGB_ENABLE
+                openrgb_mode_disable();
+#    endif
+            } else {
+#    ifdef SIGNALRGB_ENABLE
+                signalrgb_mode_disable();
+#    endif
+            }
         }
     }
-    if (srgb_state.user_enabled) {
+    if (ext_rgb_state.user_enabled) {
         get_indicators()[INDICATOR_SIGNALRGB].color = (rgb_led_t){255, 255, 255};
     } else {
-        if (srgb_state.timed_out) {
+        if (ext_rgb_state.timed_out) {
             get_indicators()[INDICATOR_SIGNALRGB].color = (rgb_led_t){0, 255, 0};
         } else {
             get_indicators()[INDICATOR_SIGNALRGB].color = (rgb_led_t){255, 0, 0};
@@ -264,31 +282,44 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             break;
         case UG_SRGB:
             if (record->event.pressed) {
-#ifdef SIGNALRGB_ENABLE
-                srgb_state.user_enabled = !srgb_state.user_enabled;
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+                ext_rgb_state.user_enabled = !ext_rgb_state.user_enabled;
 
-                if (srgb_state.user_enabled) {
+                if (ext_rgb_state.user_enabled) {
                     // When enabling, reset timeout tracking and enable RGB matrix mode
-                    srgb_state.last_activity = timer_read32();
-                    srgb_state.timed_out     = false;
-                    signalrgb_mode_enable(); // Enable RGB matrix SignalRGB mode
+                    ext_rgb_state.last_activity = timer_read32();
+                    ext_rgb_state.timed_out     = false;
+#    ifdef SIGNALRGB_ENABLE
+                    signalrgb_mode_enable();
+#    elif defined(OPENRGB_ENABLE)
+                    openrgb_mode_enable();
+#    endif
                 } else {
+#    ifdef SIGNALRGB_ENABLE
                     signalrgb_mode_disable();
+#    elif defined(OPENRGB_ENABLE)
+                    openrgb_mode_disable();
+#    endif
                 }
 #endif
             }
             return false;
 
         case UG_ANIM1:
-#ifdef SIGNALRGB_ENABLE
-            // Check real-time state (not cached) so first press after unblocking works
-            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
-                if (record->event.pressed) {
-                    tap_code16(S(C(A(G(KC_Z)))));
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+            if (calculate_ext_rgb_should_process()) {
+                if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
+                    return false; // Ignore entirely when OpenRGB is active
                 }
-                return false;
+#    ifdef SIGNALRGB_ENABLE
+                if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
+                    if (record->event.pressed) {
+                        tap_code16(S(C(A(G(KC_Z)))));
+                    }
+                    return false;
+                }
+#    endif
             }
-            // Let QMK handle it when SignalRGB is disabled
 #endif
             if (record->event.pressed) {
                 rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
@@ -317,13 +348,19 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             return false;
 
         case UG_VALU:
-            // Check real-time state (not cached) so first press after unblocking works
-#ifdef SIGNALRGB_ENABLE
-            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
-                if (record->event.pressed) {
-                    tap_code16(S(C(A(G(KC_EQL)))));
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+            if (calculate_ext_rgb_should_process()) {
+                if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
+                    return false; // Ignore entirely when OpenRGB is active
                 }
-                return false;
+#    ifdef SIGNALRGB_ENABLE
+                if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
+                    if (record->event.pressed) {
+                        tap_code16(S(C(A(G(KC_EQL)))));
+                    }
+                    return false;
+                }
+#    endif
             }
 #endif
             // Let QMK handle it when SignalRGB is disabled
@@ -343,13 +380,19 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             return false;
 
         case UG_VALD:
-            // Check real-time state (not cached) so first press after unblocking works
-#ifdef SIGNALRGB_ENABLE
-            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
-                if (record->event.pressed) {
-                    tap_code16(S(C(A(G(KC_MINS)))));
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+            if (calculate_ext_rgb_should_process()) {
+                if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
+                    return false; // Ignore entirely when OpenRGB is active
                 }
-                return false;
+#    ifdef SIGNALRGB_ENABLE
+                if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
+                    if (record->event.pressed) {
+                        tap_code16(S(C(A(G(KC_MINS)))));
+                    }
+                    return false;
+                }
+#    endif
             }
 #endif
             // Let QMK handle it when SignalRGB is disabled
@@ -373,29 +416,43 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             }
             return false;
 
-#ifdef SIGNALRGB_ENABLE
         case UG_NEXT:
-            // Check real-time state (not cached) so first press after unblocking works
-            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
-                if (record->event.pressed) {
-                    tap_code16(S(C(A(G(KC_Q)))));
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+            if (calculate_ext_rgb_should_process()) {
+                if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
+                    return false; // Ignore entirely when OpenRGB is active
                 }
-                return false;
+#    ifdef SIGNALRGB_ENABLE
+                if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
+                    if (record->event.pressed) {
+                        tap_code16(S(C(A(G(KC_Q)))));
+                    }
+                    return false;
+                }
+#    endif
             }
+#endif
             // Let QMK handle it when SignalRGB is disabled
             return true;
 
         case UG_PREV:
-            // Check real-time state (not cached) so first press after unblocking works
-            if (calculate_signalrgb_should_process() && !srgb_state.timed_out) {
-                if (record->event.pressed) {
-                    tap_code16(S(C(A(G(KC_A)))));
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+            if (calculate_ext_rgb_should_process()) {
+                if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
+                    return false; // Ignore entirely when OpenRGB is active
                 }
-                return false;
+#    ifdef SIGNALRGB_ENABLE
+                if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
+                    if (record->event.pressed) {
+                        tap_code16(S(C(A(G(KC_A)))));
+                    }
+                    return false;
+                }
+#    endif
             }
+#endif
             // Let QMK handle it when SignalRGB is disabled
             return true;
-#endif
 
         case UG_TOGG:
             // RGB toggle should always use QMK handling, not SignalRGB
@@ -433,6 +490,19 @@ layer_state_t layer_state_set_shared(layer_state_t state) {
     return state;
 }
 
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+extern rgb_led_t srgb_led_buffer[];
+static uint8_t get_ext_rgb_max_brightness(void) {
+    uint8_t max_val = 0;
+    for (uint8_t i = 0; i < RGB_MATRIX_LED_COUNT; i++) {
+        if (srgb_led_buffer[i].r > max_val) max_val = srgb_led_buffer[i].r;
+        if (srgb_led_buffer[i].g > max_val) max_val = srgb_led_buffer[i].g;
+        if (srgb_led_buffer[i].b > max_val) max_val = srgb_led_buffer[i].b;
+    }
+    return max_val;
+}
+#endif
+
 bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
     if (user_config.bg_blackout_mode) {
         for (uint8_t i = led_min; i < led_max; i++) {
@@ -444,9 +514,9 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
         return true;
     }
 
-    // Determine indicator brightness based on SignalRGB state
-#ifdef SIGNALRGB_ENABLE
-    uint8_t ind_brightness = calculate_signalrgb_should_process() ? signalrgb_get_max_brightness() : user_config.indicator_brightness;
+    // Determine indicator brightness based on external RGB state
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+    uint8_t ind_brightness = calculate_ext_rgb_should_process() ? get_ext_rgb_max_brightness() : user_config.indicator_brightness;
 #else
     uint8_t ind_brightness = user_config.indicator_brightness;
 #endif
@@ -515,11 +585,39 @@ void leader_end_shared(void) {
     }
 }
 
-#if defined(VIA_ENABLE) && defined(SIGNALRGB_ENABLE)
-extern bool kc_raw_hid_rx(uint8_t src, uint8_t *data, uint8_t length);
+#if defined(VIA_ENABLE) && (defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE))
+#ifdef SIGNALRGB_ENABLE
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
+#endif
 
 bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
+    // --- OpenRGB commands (0x01–0x09) ---
+#ifdef OPENRGB_ENABLE
+    if (data[0] >= 0x01 && data[0] <= 0x09) {
+        ext_rgb_state.last_activity = timer_read32();
+        ext_rgb_state.active_source = EXT_RGB_OPENRGB;
+
+        if (ext_rgb_state.timed_out) {
+            ext_rgb_state.timed_out = false;
+            if (ext_rgb_state.user_enabled) {
+                openrgb_mode_enable();
+            }
+        }
+
+        if (!ext_rgb_state.user_enabled && data[0] == QMK_OPENRGB_SET_MODE && data[4] == 25) {
+            return false;
+        }
+
+        if (openrgb_raw_hid_rx(data, length)) {
+            register_activity();
+            return true;
+        }
+        return false;
+    }
+#endif
+
+    // --- SignalRGB commands (0x21–0x28) ---
+#ifdef SIGNALRGB_ENABLE
     switch (data[0]) {
         case GET_QMK_VERSION:
         case GET_PROTOCOL_VERSION:
@@ -534,17 +632,18 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
             return false;
     }
 
-    srgb_state.last_activity = timer_read32();
+    ext_rgb_state.last_activity = timer_read32();
+    ext_rgb_state.active_source = EXT_RGB_SIGNALRGB;
 
     // Clear timeout flag when receiving data
-    if (srgb_state.timed_out) {
-        srgb_state.timed_out = false;
-        if (srgb_state.user_enabled) {
+    if (ext_rgb_state.timed_out) {
+        ext_rgb_state.timed_out = false;
+        if (ext_rgb_state.user_enabled) {
             signalrgb_mode_enable();
         }
     }
 
-    if (!srgb_state.user_enabled && data[0] == SET_SIGNALRGB_MODE_ENABLE) {
+    if (!ext_rgb_state.user_enabled && data[0] == SET_SIGNALRGB_MODE_ENABLE) {
         return false;
     }
 
@@ -554,6 +653,7 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
         register_activity();
         return true;
     }
+#endif
 
     return false;
 }
@@ -585,8 +685,8 @@ bool dynamic_macro_record_end_shared(int8_t direction) {
 }
 
 bool get_signalrgb_user_enabled(void) {
-#ifdef SIGNALRGB_ENABLE
-    return srgb_state.user_enabled;
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+    return ext_rgb_state.user_enabled;
 #else
     return false;
 #endif

@@ -128,7 +128,7 @@ void keyboard_post_init_user(void) {
 
 void matrix_scan_user(void) {
     matrix_scan_shared();
-#ifdef SIGNALRGB_ENABLE
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
     get_indicators()[INDICATOR_SIGNALRGB].active = layer_state_is(HARDWARE);
 #endif
 }
@@ -217,7 +217,7 @@ bool dynamic_macro_record_end_user(int8_t direction) {
     return dynamic_macro_record_end_shared(direction);
 }
 
-#if defined(VIA_ENABLE) && defined(SIGNALRGB_ENABLE)
+#if defined(VIA_ENABLE) && (defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE))
 bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
     return via_command_shared(src, data, length);
 }
