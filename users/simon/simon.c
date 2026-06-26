@@ -6,12 +6,12 @@
 #endif
 
 // --- COMBO DEFINITIONS ---
-const uint16_t PROGMEM op_combo[]   = {KC_O, KC_P, COMBO_END};
+/*const uint16_t PROGMEM op_combo[]   = {KC_O, KC_P, COMBO_END};
 const uint16_t PROGMEM io_combo[]   = {KC_I, KC_O, COMBO_END};
 combo_t                key_combos[] = {
     [OP_BSPC] = COMBO(op_combo, KC_BSPC),
     [IO_DEL]  = COMBO(io_combo, KC_DEL),
-};
+};*/
 
 // --- STATE STORAGE ---
 // Clean separation: Immediate control flags vs. Deferred rendering actions
@@ -336,7 +336,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                     rgb_matrix_increase_val_noeeprom();
                 }
                 // Sync indicator brightness to keyboard brightness (with floor)
-                uint8_t new_val = rgb_matrix_get_val();
+                uint8_t new_val                  = rgb_matrix_get_val();
                 user_config.indicator_brightness = new_val < MIN_INDICATOR_BRIGHTNESS ? MIN_INDICATOR_BRIGHTNESS : new_val;
                 eeconfig_update_user(user_config.raw);
             }
@@ -367,7 +367,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                     rgb_matrix_decrease_val_noeeprom();
                 }
                 // Sync indicator brightness to keyboard brightness (with floor)
-                uint8_t new_val = rgb_matrix_get_val();
+                uint8_t new_val                  = rgb_matrix_get_val();
                 user_config.indicator_brightness = new_val < MIN_INDICATOR_BRIGHTNESS ? MIN_INDICATOR_BRIGHTNESS : new_val;
                 eeconfig_update_user(user_config.raw);
             }
