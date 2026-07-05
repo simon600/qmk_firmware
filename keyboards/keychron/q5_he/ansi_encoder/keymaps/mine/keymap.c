@@ -230,3 +230,13 @@ void suspend_power_down_user(void) {
 void suspend_wakeup_init_user(void) {
     suspend_wakeup_init_shared();
 }
+
+uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record) {
+    switch (keycode) {
+        case LT(WIN_FN, KC_SPC):
+        case LT(MAC_FN, KC_SPC):
+            return 175; // Custom timing for your spacebar in milliseconds
+        default:
+            return TAPPING_TERM; // Uses the default global term for everything else
+    }
+}
