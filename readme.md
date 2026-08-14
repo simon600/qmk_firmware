@@ -4,6 +4,14 @@
 
 ![Keychron Keyboards](https://raw.githubusercontent.com/Keychron/Keychron-Keyboards-Hardware-Design/main/docs/assets/hero-keychron-hardware-design.jpg)
 
+> [!TIP]
+> ### ⌨️ Simon's Custom Firmware Documentation
+> See **[`MY_KEYMAPS.md`](MY_KEYMAPS.md)** for a complete reference of custom keymaps, Leader key sequences, dynamic macros, shortcuts, indicators, and build commands for:
+> - **[Keychron Q1 v2 ANSI Encoder](keyboards/keychron/q1v2/ansi_encoder/keymaps/mine/keymap.c)**
+> - **[Keychron Q5 HE ANSI Encoder](keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/keymap.c)**
+> - **[Userspace Helpers (`users/simon`)](users/simon/simon.c)**
+
+
 Official QMK firmware for Keychron and Lemokey keyboards. This repository contains the firmware source, build configurations, and keymaps for 63+ boards across the Q, Q HE, Q Max, K HE, K Max, K Pro, V, V Max, C Pro, S, X, and Lemokey series.
 
 ## Why Open Source?
