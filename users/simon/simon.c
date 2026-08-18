@@ -595,12 +595,12 @@ void leader_end_shared(void) {
     }
 }
 
-#if defined(VIA_ENABLE) && (defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE))
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
 #ifdef SIGNALRGB_ENABLE
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
 #endif
 
-bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
+bool raw_hid_receive_shared(uint8_t src, uint8_t *data, uint8_t length) {
     // --- OpenRGB commands (0x01–0x09) ---
 #ifdef OPENRGB_ENABLE
     if (data[0] >= 0x01 && data[0] <= 0x09) {
@@ -665,6 +665,12 @@ bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
 
     return false;
 }
+
+#if defined(VIA_ENABLE)
+bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length) {
+    return raw_hid_receive_shared(src, data, length);
+}
+#endif
 #endif
 
 // Helper function for keymaps to set the active FN layer

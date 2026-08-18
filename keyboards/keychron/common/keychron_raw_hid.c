@@ -281,8 +281,14 @@ void via_raw_hid_send(uint8_t src, uint8_t *data, uint8_t len) {
     kc_raw_hid_send(src, data, len);
 }
 #    else
+__attribute__((weak)) bool raw_hid_receive_user(uint8_t src, uint8_t *data, uint8_t length) {
+    return false;
+}
+
 void raw_hid_receive(uint8_t src, uint8_t *data, uint8_t length) {
-    kc_raw_hid_rx(src, data, length);
+    if (!kc_raw_hid_rx(src, data, length)) {
+        raw_hid_receive_user(src, data, length);
+    }
 }
 #    endif
 #endif

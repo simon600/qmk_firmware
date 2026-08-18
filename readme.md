@@ -8,7 +8,7 @@
 > ### ⌨️ Simon's Custom Firmware Documentation
 > See **[`MY_KEYMAPS.md`](MY_KEYMAPS.md)** for a complete reference of custom keymaps, Leader key sequences, dynamic macros, shortcuts, indicators, and build commands for:
 > - **[Keychron Q1 v2 ANSI Encoder](keyboards/keychron/q1v2/ansi_encoder/keymaps/mine/keymap.c)**
-> - **[Keychron Q5 HE ANSI Encoder](keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/keymap.c)**
+> - **[Keychron Q5 HE ANSI Encoder](keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/keymap.c)** ([Keymap & HE Profiles README](keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/README.md))
 > - **[Userspace Helpers (`users/simon`)](users/simon/simon.c)**
 
 

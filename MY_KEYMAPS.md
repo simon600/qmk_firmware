@@ -9,7 +9,7 @@ This document summarizes custom keyboards, keymaps, shortcuts, leader keys, indi
 | Keyboard | Keymap Directory | Keymap File | Key Features |
 | :--- | :--- | :--- | :--- |
 | **Keychron Q1 v2 (ANSI Encoder)** | [`keyboards/keychron/q1v2/ansi_encoder/keymaps/mine/`](keyboards/keychron/q1v2/ansi_encoder/keymaps/mine/) | [`keymap.c`](keyboards/keychron/q1v2/ansi_encoder/keymaps/mine/keymap.c) | 6 Layers (Mac/Win/Hardware), Dynamic Macros, Leader Key, Encoder Map |
-| **Keychron Q5 HE (ANSI Encoder)** | [`keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/`](keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/) | [`keymap.c`](keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/keymap.c) | 8 Layers (Mac/Win/Gaming 1&2/Hardware), SignalRGB/OpenRGB, Hall Effect Profiles |
+| **Keychron Q5 HE (ANSI Encoder)** | [`keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/`](keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/) | [`keymap.c`](keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/keymap.c) ([HE Profiles README](keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/README.md)) | 8 Layers (Mac/Win/Gaming 1&2/Hardware), SignalRGB/OpenRGB, Hardcoded Hall Effect Profiles |
 | **Shared Userspace** | [`users/simon/`](users/simon/) | [`simon.c`](users/simon/simon.c) / [`simon.h`](users/simon/simon.h) | Shared indicator system, inactivity dimming, leader sequences, external RGB sync |
 
 ---
@@ -116,6 +116,27 @@ Record and replay keystroke macros on the fly without reflashing.
     - **Green**: External RGB idle / timed out.
     - **Red**: External RGB disabled.
   - When SignalRGB is active, QMK RGB adjustment keys intercept and forward standard SignalRGB shortcuts (`Ctrl+Alt+Shift+Gui` + `+`/`-`/`Q`/`A`/`Z`).
+
+---
+
+## 🎮 Hall Effect (HE) Profiles & Switching (Q5 HE)
+
+See full details in **[`keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/README.md`](keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/README.md)**.
+
+### Profile Switching Shortcuts
+1. **`TG_GMG` Key (F14 position next to Delete on `WIN_BASE`):**
+   - **Press 1**: Gaming Profile 1 (Rapid Trigger WASD, 1.0mm actuation, Red LED).
+   - **Press 2**: Gamepad Profile 2 (Xbox controller / analog axis bindings, Green LED).
+   - **Press 3**: Turn off Gaming mode & restore Profile 0 (Default typing).
+2. **Keychron Hardware Combo (`Fn + P` held, then press):**
+   - <kbd>X</kbd> ➔ Profile 0 (Default / Typing)
+   - <kbd>C</kbd> ➔ Profile 1 (Gaming / Rapid Trigger)
+   - <kbd>V</kbd> ➔ Profile 2 (Gamepad / Controller)
+
+### Hardcoded Profiles Summary
+* **Profile 0 (Default)**: Normal $2.0\text{ mm}$ actuation typing mode.
+* **Profile 1 (Gaming)**: $1.0\text{ mm}$ actuation globally, **Rapid Trigger** on WASD ($1.0\text{ mm}$ actuation, $0.4\text{ mm}$ press/release sensitivity).
+* **Profile 2 (Gamepad)**: $1.0\text{ mm}$ actuation globally with full Xbox controller stick / button analog matrix mappings.
 
 ---
 

@@ -141,9 +141,12 @@ void leader_end_shared(void);
 bool dynamic_macro_record_start_shared(int8_t direction);
 bool dynamic_macro_record_end_shared(int8_t direction);
 
-#if defined(VIA_ENABLE) && (defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE))
-// VIA command handling
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+// Raw HID / External RGB command handling
+bool raw_hid_receive_shared(uint8_t src, uint8_t *data, uint8_t length);
+#if defined(VIA_ENABLE)
 bool via_command_shared(uint8_t src, uint8_t *data, uint8_t length);
+#endif
 #endif
 
 // Suspend callbacks

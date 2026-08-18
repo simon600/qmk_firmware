@@ -120,10 +120,94 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
 
 // --- KEYBOARD-SPECIFIC INDICATOR CONFIGURATION ---
 
+// --- HARDCODED HE PROFILES ---
+static void init_custom_he_profiles(void) {
+    // === Profile 1: Gaming (Rapid Trigger on WASD, 1.0mm actuation everywhere) ===
+    analog_matrix_profile_t *p1 = profile_get(1);
+    p1->global.mode               = AKM_RAPID;
+    p1->global.act_pt             = 20; // 2.0mm fallback
+    p1->global.rpd_trig_sen       = 4;  // 0.4mm sensitivity
+    p1->global.rpd_trig_sen_deact = 4;  // 0.4mm release sensitivity
+
+    for (uint8_t r = 0; r < MATRIX_ROWS; r++) {
+        for (uint8_t c = 0; c < MATRIX_COLS; c++) {
+            p1->key_config[r][c].mode               = AKM_REGULAR;
+            p1->key_config[r][c].act_pt             = 10; // 1.0mm actuation
+            p1->key_config[r][c].rpd_trig_sen       = 4;
+            p1->key_config[r][c].rpd_trig_sen_deact = 4;
+            p1->key_config[r][c].adv_mode           = 0;
+            p1->key_config[r][c].adv_mode_data      = 0;
+        }
+    }
+
+    // Rapid Trigger enabled specifically for WASD
+    p1->key_config[2][2].mode = AKM_RAPID; // W (Row 2, Col 2)
+    p1->key_config[3][1].mode = AKM_RAPID; // A (Row 3, Col 1)
+    p1->key_config[3][2].mode = AKM_RAPID; // S (Row 3, Col 2)
+    p1->key_config[3][3].mode = AKM_RAPID; // D (Row 3, Col 3)
+
+    // === Profile 2: Gamepad (Controller axis / button bindings, 1.0mm actuation) ===
+    analog_matrix_profile_t *p2 = profile_get(2);
+    p2->global.mode               = AKM_RAPID;
+    p2->global.act_pt             = 20;
+    p2->global.rpd_trig_sen       = 4;
+    p2->global.rpd_trig_sen_deact = 4;
+
+    for (uint8_t r = 0; r < MATRIX_ROWS; r++) {
+        for (uint8_t c = 0; c < MATRIX_COLS; c++) {
+            p2->key_config[r][c].mode               = AKM_REGULAR;
+            p2->key_config[r][c].act_pt             = 10; // 1.0mm actuation
+            p2->key_config[r][c].rpd_trig_sen       = 4;
+            p2->key_config[r][c].rpd_trig_sen_deact = 4;
+            p2->key_config[r][c].adv_mode           = 0;
+            p2->key_config[r][c].adv_mode_data      = 0;
+        }
+    }
+
+    // Gamepad controller axis & button assignments
+    struct {
+        uint8_t r;
+        uint8_t c;
+        uint8_t js_axis;
+    } gp_mappings[] = {
+        {3, 1, 0},   // A      -> LS_LEFT (Left Stick Left)
+        {3, 3, 1},   // D      -> LS_RGHT (Left Stick Right)
+        {3, 2, 2},   // S      -> LS_DOWN (Left Stick Down)
+        {2, 2, 3},   // W      -> LS_UP   (Left Stick Up)
+        {5, 11, 5},  // RCTL   -> XB_RT   (Right Trigger)
+        {3, 6, 6},   // H      -> RS_LEFT (Right Stick Left)
+        {3, 8, 7},   // K      -> RS_RGHT (Right Stick Right)
+        {3, 7, 8},   // J      -> RS_DOWN (Right Stick Down)
+        {2, 7, 9},   // U      -> RS_UP   (Right Stick Up)
+        {4, 12, 13}, // /      -> XB_A    (A Button)
+        {3, 11, 14}, // '      -> XB_B    (B Button)
+        {3, 10, 15}, // ;      -> XB_X    (X Button)
+        {2, 11, 16}, // [      -> XB_Y    (Y Button)
+        {2, 6, 18},  // Y      -> XB_RB   (Right Bumper)
+        {1, 0, 19},  // `      -> XB_VIEW (View / Back)
+        {1, 14, 20}, // PgUp   -> XB_MEMU (Menu / Start)
+        {4, 13, 22}, // RShift -> XB_R3   (Right Stick Click)
+        {4, 14, 23}, // Up     -> XB_UP   (D-Pad Up)
+        {5, 13, 24}, // Down   -> XB_DOWN (D-Pad Down)
+        {5, 12, 25}, // Left   -> XB_LEFT (D-Pad Left)
+        {5, 14, 26}, // Right  -> XB_RGHT (D-Pad Right)
+        {3, 13, 27}, // Home   -> XB_XBOX (Xbox Guide Button)
+    };
+
+    for (size_t i = 0; i < sizeof(gp_mappings) / sizeof(gp_mappings[0]); i++) {
+        p2->key_config[gp_mappings[i].r][gp_mappings[i].c].adv_mode = AKM_GAMEPAD;
+        p2->key_config[gp_mappings[i].r][gp_mappings[i].c].js_axis  = gp_mappings[i].js_axis;
+    }
+
+    // Refresh travel configs for the currently selected profile
+    update_travel_configs();
+}
+
 // --- QMK CALLBACK WRAPPERS ---
 
 void keyboard_post_init_user(void) {
     keyboard_post_init_shared();
+    init_custom_he_profiles();
 }
 
 void matrix_scan_user(void) {
@@ -217,10 +301,16 @@ bool dynamic_macro_record_end_user(int8_t direction) {
     return dynamic_macro_record_end_shared(direction);
 }
 
-#if defined(VIA_ENABLE) && (defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE))
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+#if defined(VIA_ENABLE)
 bool via_command_user(uint8_t src, uint8_t *data, uint8_t length) {
     return via_command_shared(src, data, length);
 }
+#else
+bool raw_hid_receive_user(uint8_t src, uint8_t *data, uint8_t length) {
+    return raw_hid_receive_shared(src, data, length);
+}
+#endif
 #endif
 
 void suspend_power_down_user(void) {
