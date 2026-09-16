@@ -1,4 +1,7 @@
 #include "simon.h"
+#ifdef OPENRGB_ENABLE
+#    include "openrgb.h"
+#endif
 #include "keychron_common.h"
 #include "print.h"
 #ifdef KEYCHRON_RGB_ENABLE
@@ -192,24 +195,20 @@ void matrix_scan_shared(void) {
     }
 
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-    // Check for external RGB timeout (immediate state update)
-    // Only check timeout if we've received data before (last_activity != 0)
+    // SignalRGB streams continuously, so silence means its host app is gone:
+    // fall back to the EEPROM effect. OpenRGB direct is deliberately not
+    // timed out - a hardware/static mode set by OpenRGB must persist through
+    // sleep and KVM switches, and a frozen last direct frame is acceptable.
     if (!ext_rgb_state.timed_out && ext_rgb_state.last_activity != 0 &&
         ext_rgb_state.active_source == EXT_RGB_SIGNALRGB &&
         rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB &&
         timer_elapsed32(ext_rgb_state.last_activity) > 500) {
         ext_rgb_state.timed_out = true;
-        if (ext_rgb_state.user_enabled) {
-            if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
-#    ifdef OPENRGB_ENABLE
-                openrgb_mode_disable();
-#    endif
-            } else {
 #    ifdef SIGNALRGB_ENABLE
-                signalrgb_mode_disable();
-#    endif
-            }
+        if (ext_rgb_state.user_enabled) {
+            signalrgb_mode_disable();
         }
+#    endif
     }
     if (ext_rgb_state.user_enabled) {
         get_indicators()[INDICATOR_SIGNALRGB].color = (rgb_led_t){255, 255, 255};
@@ -318,9 +317,6 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
         case UG_ANIM1:
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
             if (calculate_ext_rgb_should_process()) {
-                if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
-                    return false; // Ignore entirely when OpenRGB is active
-                }
 #    ifdef SIGNALRGB_ENABLE
                 if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
                     if (record->event.pressed) {
@@ -360,9 +356,6 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
         case UG_VALU:
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
             if (calculate_ext_rgb_should_process()) {
-                if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
-                    return false; // Ignore entirely when OpenRGB is active
-                }
 #    ifdef SIGNALRGB_ENABLE
                 if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
                     if (record->event.pressed) {
@@ -392,9 +385,6 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
         case UG_VALD:
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
             if (calculate_ext_rgb_should_process()) {
-                if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
-                    return false; // Ignore entirely when OpenRGB is active
-                }
 #    ifdef SIGNALRGB_ENABLE
                 if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
                     if (record->event.pressed) {
@@ -429,9 +419,6 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
         case UG_NEXT:
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
             if (calculate_ext_rgb_should_process()) {
-                if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
-                    return false; // Ignore entirely when OpenRGB is active
-                }
 #    ifdef SIGNALRGB_ENABLE
                 if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
                     if (record->event.pressed) {
@@ -448,9 +435,6 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
         case UG_PREV:
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
             if (calculate_ext_rgb_should_process()) {
-                if (ext_rgb_state.active_source == EXT_RGB_OPENRGB) {
-                    return false; // Ignore entirely when OpenRGB is active
-                }
 #    ifdef SIGNALRGB_ENABLE
                 if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
                     if (record->event.pressed) {
@@ -514,6 +498,9 @@ static uint8_t get_ext_rgb_max_brightness(void) {
 #endif
 
 bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
+#ifdef OPENRGB_ENABLE
+    openrgb_reassert_pending_hsv();
+#endif
     if (user_config.bg_blackout_mode) {
         for (uint8_t i = led_min; i < led_max; i++) {
             rgb_matrix_set_color(i, 0, 0, 0);
@@ -526,7 +513,9 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
 
     // Determine indicator brightness based on external RGB state
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-    uint8_t ind_brightness = calculate_ext_rgb_should_process() ? get_ext_rgb_max_brightness() : user_config.indicator_brightness;
+    // Match indicator brightness to the external frame whenever the external
+    // buffer is what's on the keys (SignalRGB or OpenRGB direct), regardless of the toggle
+    uint8_t ind_brightness = (rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB) ? get_ext_rgb_max_brightness() : user_config.indicator_brightness;
 #else
     uint8_t ind_brightness = user_config.indicator_brightness;
 #endif
@@ -602,19 +591,15 @@ extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
 
 bool raw_hid_receive_shared(uint8_t src, uint8_t *data, uint8_t length) {
     // --- OpenRGB commands (0x01–0x09) ---
+    // Never gated by the ext-RGB toggle: OpenRGB's detector busy-loops until it
+    // gets a reply, so a dropped query hangs its whole HID detection thread.
+    // SET_MODE decides whether the matrix is in direct or a native effect; the
+    // toggle key below only governs SignalRGB.
 #ifdef OPENRGB_ENABLE
     if (data[0] >= 0x01 && data[0] <= 0x09) {
-        if (!ext_rgb_state.user_enabled) {
-            return false;
-        }
-
         ext_rgb_state.last_activity = timer_read32();
         ext_rgb_state.active_source = EXT_RGB_OPENRGB;
-
-        if (ext_rgb_state.timed_out) {
-            ext_rgb_state.timed_out = false;
-            openrgb_mode_enable();
-        }
+        ext_rgb_state.timed_out     = false;
 
         if (openrgb_raw_hid_rx(data, length)) {
             register_activity();
