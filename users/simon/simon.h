@@ -10,8 +10,7 @@
 
 // --- CUSTOM KEYCODES ---
 enum custom_keycodes_shared {
-    UG_SRGB = SAFE_RANGE,
-    UG_ANIM1,
+    UG_ANIM1 = SAFE_RANGE,
     UG_ANIM2,
     UG_ANIM3,
     M_NW,
@@ -90,7 +89,6 @@ typedef enum {
 typedef struct {
     uint32_t         last_activity; // Last HID activity timestamp
     bool             timed_out;     // Whether external RGB has timed out
-    bool             user_enabled;  // Whether user has enabled external RGB via toggle
     ext_rgb_source_t active_source; // Which source is active (SignalRGB or OpenRGB)
 } ext_rgb_state_t;
 #endif
@@ -105,7 +103,6 @@ typedef union {
         uint8_t version;              // byte 0: data version id
         uint8_t indicator_brightness; // byte 1
         bool    bg_blackout_mode;     // byte 2
-        bool    ext_rgb_enabled;      // byte 3
     };
 } user_config_t;
 
@@ -157,5 +154,4 @@ void suspend_wakeup_init_shared(void);
 indicator_t *get_indicators(void);
 uint8_t      get_active_fn_layer(void);
 void         set_active_fn_layer(uint8_t layer);
-bool         get_signalrgb_user_enabled(void);
 

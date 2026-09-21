@@ -56,13 +56,11 @@ static bool mod_led_mask[RGB_MATRIX_LED_COUNT];
 
 // --- STATE MANAGEMENT FUNCTIONS ---
 
-#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-// Calculate whether external RGB should process LED updates (ALWAYS COMPUTED, NEVER CACHED)
-// This is derived from immediate control state and should be called fresh each time
-static bool calculate_ext_rgb_should_process(void) {
-    if (!ext_rgb_state.user_enabled) return false;
-    if (ext_rgb_state.timed_out) return false;
-    return true;
+#ifdef SIGNALRGB_ENABLE
+// True while SignalRGB is actively streaming, in which case the RGB keys are
+// forwarded to the host app as hotkeys instead of being handled locally.
+static bool signalrgb_is_streaming(void) {
+    return !ext_rgb_state.timed_out && ext_rgb_state.active_source == EXT_RGB_SIGNALRGB;
 }
 #endif
 
@@ -114,7 +112,6 @@ void eeconfig_init_user(void) {
     user_config.version              = USER_CONFIG_VERSION;
     user_config.indicator_brightness = 255;
     user_config.bg_blackout_mode     = false;
-    user_config.ext_rgb_enabled      = true;
     eeconfig_update_user(user_config.raw);
 }
 
@@ -147,28 +144,14 @@ void keyboard_post_init_shared(void) {
     }
 
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-    // Initialize external RGB control state
-    ext_rgb_state.user_enabled  = user_config.ext_rgb_enabled;
+    // No source claim and no direct-mode switch here: active_source means "who is
+    // currently driving the LEDs", which only real HID traffic can establish, and
+    // the direct buffer is empty until a host streams into it. Claiming SignalRGB at
+    // boot left the brightness keys forwarding hotkeys to a host app that wasn't
+    // running, with no local brightness control.
     ext_rgb_state.timed_out     = false;
-    ext_rgb_state.last_activity = timer_read32();
+    ext_rgb_state.last_activity = 0;
     ext_rgb_state.active_source = EXT_RGB_NONE;
-
-    // Enable external RGB mode if user enabled it
-    if (ext_rgb_state.user_enabled) {
-#    if defined(SIGNALRGB_ENABLE)
-        signalrgb_mode_enable();
-        ext_rgb_state.active_source = EXT_RGB_SIGNALRGB;
-#    elif defined(OPENRGB_ENABLE)
-        openrgb_mode_enable();
-        ext_rgb_state.active_source = EXT_RGB_OPENRGB;
-#    endif
-    } else {
-#    if defined(SIGNALRGB_ENABLE)
-        signalrgb_mode_disable();
-#    elif defined(OPENRGB_ENABLE)
-        openrgb_mode_disable();
-#    endif
-    }
 #endif
 
 #ifdef KEYCHRON_RGB_ENABLE
@@ -199,25 +182,13 @@ void matrix_scan_shared(void) {
     // fall back to the EEPROM effect. OpenRGB direct is deliberately not
     // timed out - a hardware/static mode set by OpenRGB must persist through
     // sleep and KVM switches, and a frozen last direct frame is acceptable.
-    if (!ext_rgb_state.timed_out && ext_rgb_state.last_activity != 0 &&
-        ext_rgb_state.active_source == EXT_RGB_SIGNALRGB &&
+    if (!ext_rgb_state.timed_out && ext_rgb_state.active_source == EXT_RGB_SIGNALRGB &&
         rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB &&
         timer_elapsed32(ext_rgb_state.last_activity) > 500) {
         ext_rgb_state.timed_out = true;
 #    ifdef SIGNALRGB_ENABLE
-        if (ext_rgb_state.user_enabled) {
-            signalrgb_mode_disable();
-        }
+        signalrgb_mode_disable();
 #    endif
-    }
-    if (ext_rgb_state.user_enabled) {
-        get_indicators()[INDICATOR_SIGNALRGB].color = (rgb_led_t){255, 255, 255};
-    } else {
-        if (ext_rgb_state.timed_out) {
-            get_indicators()[INDICATOR_SIGNALRGB].color = (rgb_led_t){0, 255, 0};
-        } else {
-            get_indicators()[INDICATOR_SIGNALRGB].color = (rgb_led_t){255, 0, 0};
-        }
     }
 #endif
 }
@@ -263,7 +234,6 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             case UG_SATD:
             case UG_SPDU:
             case UG_SPDD:
-            case UG_SRGB:
             case UG_ANIM1:
             case UG_ANIM2:
             case UG_ANIM3:
@@ -287,44 +257,13 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 return false; // Don't send KC_NO
             }
             break;
-        case UG_SRGB:
-            if (record->event.pressed) {
-#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-                ext_rgb_state.user_enabled = !ext_rgb_state.user_enabled;
-                user_config.ext_rgb_enabled = ext_rgb_state.user_enabled;
-                eeconfig_update_user(user_config.raw);
-
-                if (ext_rgb_state.user_enabled) {
-                    // When enabling, reset timeout tracking and enable RGB matrix mode
-                    ext_rgb_state.last_activity = timer_read32();
-                    ext_rgb_state.timed_out     = false;
-#    ifdef SIGNALRGB_ENABLE
-                    signalrgb_mode_enable();
-#    elif defined(OPENRGB_ENABLE)
-                    openrgb_mode_enable();
-#    endif
-                } else {
-#    ifdef SIGNALRGB_ENABLE
-                    signalrgb_mode_disable();
-#    elif defined(OPENRGB_ENABLE)
-                    openrgb_mode_disable();
-#    endif
-                }
-#endif
-            }
-            return false;
-
         case UG_ANIM1:
-#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-            if (calculate_ext_rgb_should_process()) {
-#    ifdef SIGNALRGB_ENABLE
-                if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
-                    if (record->event.pressed) {
-                        tap_code16(S(C(A(G(KC_Z)))));
-                    }
-                    return false;
+#ifdef SIGNALRGB_ENABLE
+            if (signalrgb_is_streaming()) {
+                if (record->event.pressed) {
+                    tap_code16(S(C(A(G(KC_Z)))));
                 }
-#    endif
+                return false;
             }
 #endif
             if (record->event.pressed) {
@@ -354,19 +293,8 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             return false;
 
         case UG_VALU:
-#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-            if (calculate_ext_rgb_should_process()) {
-#    ifdef SIGNALRGB_ENABLE
-                if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
-                    if (record->event.pressed) {
-                        tap_code16(S(C(A(G(KC_EQL)))));
-                    }
-                    return false;
-                }
-#    endif
-            }
-#endif
-            // Let QMK handle it when SignalRGB is disabled
+            // Always local, even while a host streams: the direct-mode renderer
+            // scales by val, so this dims the incoming frames too.
             if (record->event.pressed) {
                 if (user_config.bg_blackout_mode) {
                     user_config.bg_blackout_mode = false;
@@ -383,19 +311,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             return false;
 
         case UG_VALD:
-#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-            if (calculate_ext_rgb_should_process()) {
-#    ifdef SIGNALRGB_ENABLE
-                if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
-                    if (record->event.pressed) {
-                        tap_code16(S(C(A(G(KC_MINS)))));
-                    }
-                    return false;
-                }
-#    endif
-            }
-#endif
-            // Let QMK handle it when SignalRGB is disabled
+            // Always local, see UG_VALU
             if (record->event.pressed) {
                 uint8_t current_val = rgb_matrix_get_val();
                 if (current_val <= MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP) {
@@ -417,35 +333,27 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             return false;
 
         case UG_NEXT:
-#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-            if (calculate_ext_rgb_should_process()) {
-#    ifdef SIGNALRGB_ENABLE
-                if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
-                    if (record->event.pressed) {
-                        tap_code16(S(C(A(G(KC_Q)))));
-                    }
-                    return false;
+#ifdef SIGNALRGB_ENABLE
+            if (signalrgb_is_streaming()) {
+                if (record->event.pressed) {
+                    tap_code16(S(C(A(G(KC_Q)))));
                 }
-#    endif
+                return false;
             }
 #endif
-            // Let QMK handle it when SignalRGB is disabled
+            // Let QMK handle it when SignalRGB is not streaming
             return true;
 
         case UG_PREV:
-#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-            if (calculate_ext_rgb_should_process()) {
-#    ifdef SIGNALRGB_ENABLE
-                if (ext_rgb_state.active_source == EXT_RGB_SIGNALRGB) {
-                    if (record->event.pressed) {
-                        tap_code16(S(C(A(G(KC_A)))));
-                    }
-                    return false;
+#ifdef SIGNALRGB_ENABLE
+            if (signalrgb_is_streaming()) {
+                if (record->event.pressed) {
+                    tap_code16(S(C(A(G(KC_A)))));
                 }
-#    endif
+                return false;
             }
 #endif
-            // Let QMK handle it when SignalRGB is disabled
+            // Let QMK handle it when SignalRGB is not streaming
             return true;
 
         case UG_TOGG:
@@ -625,22 +533,23 @@ bool raw_hid_receive_shared(uint8_t src, uint8_t *data, uint8_t length) {
             return false;
     }
 
-    ext_rgb_state.last_activity = timer_read32();
-    ext_rgb_state.active_source = EXT_RGB_SIGNALRGB;
+    // Only a frame means SignalRGB is actually driving. Its detection keeps polling
+    // even with the device switched off in the UI, and letting a probe claim the
+    // source would forward the RGB keys as hotkeys with nothing rendering.
+    if (data[0] == STREAM_RGB_DATA) {
+        ext_rgb_state.last_activity = timer_read32();
+        ext_rgb_state.active_source = EXT_RGB_SIGNALRGB;
+        ext_rgb_state.timed_out     = false;
 
-    // Clear timeout flag when receiving data
-    if (ext_rgb_state.timed_out) {
-        ext_rgb_state.timed_out = false;
-        if (ext_rgb_state.user_enabled) {
+        // Frames re-assert direct mode, not just the first one after a timeout:
+        // MODE_ENABLE arrives only at startup or on a UI device toggle, so a local
+        // effect change would otherwise strand the stream in a buffer nobody renders.
+        if (rgb_matrix_get_mode() != RGB_MATRIX_CUSTOM_SIGNALRGB) {
             signalrgb_mode_enable();
         }
     }
 
-    if (!ext_rgb_state.user_enabled && data[0] == SET_SIGNALRGB_MODE_ENABLE) {
-        return false;
-    }
-
-    // Process SignalRGB HID messages if user hasn't disabled it
+    // Process SignalRGB HID messages
     if (srgb_raw_hid_rx(data, length)) {
         // Track USB activity for inactivity dimming
         register_activity();
@@ -681,14 +590,6 @@ bool dynamic_macro_record_start_shared(int8_t direction) {
 bool dynamic_macro_record_end_shared(int8_t direction) {
     indicator_library[INDICATOR_MACRO_REC].active = false;
     return true;
-}
-
-bool get_signalrgb_user_enabled(void) {
-#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-    return ext_rgb_state.user_enabled;
-#else
-    return false;
-#endif
 }
 
 void suspend_power_down_shared(void) {

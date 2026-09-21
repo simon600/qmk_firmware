@@ -90,7 +90,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [HARDWARE] = LAYOUT_ansi_101(
         _______,                         _______,    _______,  _______,    _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  UG_TOGG,
         _______,               BT_HST1,  BT_HST2,    BT_HST3,  P2P4G,      _______,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,  _______,
-        UG_SRGB,               UG_NEXT,  UG_VALU,    UG_HUEU,  UG_SATU,    UG_SPDU,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,
+        _______,               UG_NEXT,  UG_VALU,    UG_HUEU,  UG_SATU,    UG_SPDU,  _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,  _______,  _______,  _______,
         _______,               UG_PREV,  UG_VALD,    UG_HUED,  UG_SATD,    UG_SPDD,  _______,    _______,  _______,  _______,  _______,    _______,            _______,            _______,  _______,  _______,  _______,  _______,
         _______,                         UG_ANIM1,   _______,  _______,    _______,  BAT_LVL,    _______,  _______,  _______,  _______,    _______,            _______,  _______,            _______,  _______,  _______,
         _______,               _______,  FN_HRD2,                                    _______,                                  _______,    _______,  _______,  _______,  _______,  _______,            _______,  _______,  _______),
@@ -213,7 +213,8 @@ void keyboard_post_init_user(void) {
 void matrix_scan_user(void) {
     matrix_scan_shared();
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-    get_indicators()[INDICATOR_SIGNALRGB].active = layer_state_is(HARDWARE);
+    // Lights like any other mapped key on this layer, but only while a host drives the LEDs
+    get_indicators()[INDICATOR_SIGNALRGB].active = layer_state_is(HARDWARE) && rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB;
 #endif
 }
 
