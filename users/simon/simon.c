@@ -329,7 +329,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
 #endif
             if (record->event.pressed) {
                 rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
-                rgb_matrix_sethsv(156, 191, 255);
+                rgb_matrix_sethsv(0, 0, 255);
             }
             return false;
 
@@ -515,7 +515,7 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
     // Match indicator brightness to the external frame whenever the external
     // buffer is what's on the keys (SignalRGB or OpenRGB direct), regardless of the toggle
-    uint8_t ind_brightness = (rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB) ? get_ext_rgb_max_brightness() : user_config.indicator_brightness;
+    uint8_t ind_brightness = (rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB) ? (uint16_t)get_ext_rgb_max_brightness() * rgb_matrix_get_val() / 255 : user_config.indicator_brightness;
 #else
     uint8_t ind_brightness = user_config.indicator_brightness;
 #endif
