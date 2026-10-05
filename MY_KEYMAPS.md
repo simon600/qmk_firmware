@@ -110,7 +110,7 @@ Record and replay keystroke macros on the fly without reflashing.
   - Wakes up immediately upon any key press or incoming USB/HID activity.
 - **FN Layer Key Masking**:
   - Activating `MAC_FN`, `WIN_FN`, or `HARDWARE` automatically highlights active keys in solid white and blacks out unmapped keys for clear visual feedback.
-- **Indicator Colors**: Catppuccin Macchiato hues with boosted saturation (pastels wash out on LEDs), defined once as `IND_COLOR_*` in `users/simon/simon.h`.
+- **Indicator Colors**: Catppuccin Macchiato hues with boosted saturation (pastels wash out on LEDs), defined once as `IND_COLOR_*` in `users/simon/simon.h`. They are the defaults of a per-indicator, per-state colour table; on the Q5 HE the table is host-editable over the host protocol (below) and stored in the user EEPROM datablock.
 - **Indicators & Auto-Hide**:
   - Caps Lock (on the Caps Lock key) and Num Lock (Q5 HE only), both **Peach**, indicators replace Keychron's built-in ones.
   - In auto-hide mode (default), status indicators (Caps Lock, Num Lock, Gaming) show for **2 s** and then fade into the key's regular color over **500 ms**. They come back on startup/wake, on any layer change (holding Space/Fn/Hardware key), and whenever an indicator turns on, off or changes color. While a layer key is held they stay visible; the 2 s window starts on release.
@@ -142,6 +142,28 @@ See full details in **[`keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/READM
 * **Profile 0 (Default)**: Normal $2.0\text{ mm}$ actuation typing mode.
 * **Profile 1 (Gaming)**: $1.0\text{ mm}$ actuation globally, **Rapid Trigger** on WASD ($1.0\text{ mm}$ actuation, $0.4\text{ mm}$ press/release sensitivity).
 * **Profile 2 (Gamepad)**: $1.0\text{ mm}$ actuation globally with full Xbox controller stick / button analog matrix mappings.
+
+---
+
+## 🔌 Host Protocol (Q5 HE, `kbd-daemon`)
+
+[`users/simon/host_protocol.c`](users/simon/host_protocol.c) / [`host_protocol.h`](users/simon/host_protocol.h) — raw HID commands `0xC0–0xCF` for a host service (`kbd-daemon`): gaming mode, settings and indicator colours. Built wherever `OPENRGB_ENABLE = yes` (defines `HOST_PROTOCOL_ENABLE`). The packet layout is documented in the header.
+
+| ID | Command | Reply |
+| :--- | :--- | :--- |
+| `0xC0` | `GET_INFO` — protocol version, feature bits, indicator count, build date | yes |
+| `0xC1` | `GET_STATE` — gaming state, active HE profile, indicator brightness, indicators always on, blackout | yes |
+| `0xC2` | `SET_GAMING` — 0 off, 1 rapid trigger, 2 gamepad (same path as `TG_GMG`) | no |
+| `0xC3` | `GET_INDICATORS` — per indicator: wire id, state count, LED index, colours | yes |
+| `0xC4` | `SET_INDICATOR_COLOR` — wire id, state, RGB, persist | no |
+| `0xC5` | `SET_SETTING` — 1 indicator brightness, 2 indicators always on (`IND_MODE`), 3 blackout; persist | no |
+| `0xC6` | `RESET_INDICATOR_COLORS` — back to the `IND_COLOR_*` defaults; persist | no |
+| `0xCF` | `NOTIFY_STATE` (keyboard → host) — state changed on the keyboard itself | — |
+
+- **Sharing the interface with OpenRGB**: Linux delivers every input report to every process with the hidraw node open, and OpenRGB takes the first report it reads as its answer. So writes never reply, and for 1 s after OpenRGB's protocol-version query (`0x01`, which opens every detection) host replies are dropped and notifications held.
+- **Notifications** only cover changes made on the keyboard (`TG_GMG`, `Fn + P`, `IND_MODE`, indicator brightness keys), coalesced to one per 100 ms; changes a host command made are not echoed.
+- **Indicator wire ids** (stable across keyboards): `1` macro recording, `2` leader, `3` external RGB, `4` gaming (rapid / gamepad), `5` caps lock, `6` num lock. A host colour edit wakes auto-hidden indicators so the change is visible.
+- **EEPROM**: host-protocol keyboards keep `user_config` and the colour table in a 64-byte user datablock (`EECONFIG_USER_DATA_SIZE`). The first boot after switching to it starts from defaults once. Not for VIA keyboards (Q1 v2): the datablock would shift the dynamic keymap.
 
 ---
 

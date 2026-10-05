@@ -2,6 +2,9 @@
 #ifdef OPENRGB_ENABLE
 #    include "openrgb.h"
 #endif
+#ifdef HOST_PROTOCOL_ENABLE
+#    include "host_protocol.h"
+#endif
 #include "keychron_common.h"
 #include "print.h"
 #ifdef KEYCHRON_RGB_ENABLE
@@ -45,21 +48,53 @@ static ext_rgb_state_t ext_rgb_state = {0};
 #endif
 
 // --- COMPILE-TIME INDICATOR REGISTRY ---
-// Initialize with defaults: all LED indices to 255 (disabled), inactive, black color
+// Initialize with defaults: all LED indices to 255 (disabled), inactive, state 0
 // Keyboard-specific mappings are applied via KEYBOARD_LED_MAP macro
-indicator_t indicator_library[INDICATOR_COUNT] = {[0 ... INDICATOR_COUNT - 1] = {.led_index = 255, .active = false, .color = {0, 0, 0}},
-                                                  [INDICATOR_MACRO_REC]       = {.led_index = 255, .active = false, .color = IND_COLOR_RED, .always_on = true},
-                                                  [INDICATOR_LEADER]          = {.led_index = 255, .active = false, .color = IND_COLOR_PEACH, .always_on = true},
+indicator_t indicator_library[INDICATOR_COUNT] = {[0 ... INDICATOR_COUNT - 1] = {.led_index = 255, .active = false, .state = 0},
+                                                  [INDICATOR_MACRO_REC]       = {.led_index = 255, .active = false, .always_on = true},
+                                                  [INDICATOR_LEADER]          = {.led_index = 255, .active = false, .always_on = true},
 #ifdef CAPS_LOCK_INDEX
-                                                  [INDICATOR_CAPS_LOCK] = {.led_index = CAPS_LOCK_INDEX, .active = false, .color = IND_COLOR_PEACH},
+                                                  [INDICATOR_CAPS_LOCK] = {.led_index = CAPS_LOCK_INDEX, .active = false},
 #endif
 #ifdef NUM_LOCK_INDEX
-                                                  [INDICATOR_NUM_LOCK] = {.led_index = NUM_LOCK_INDEX, .active = false, .color = IND_COLOR_PEACH},
+                                                  [INDICATOR_NUM_LOCK] = {.led_index = NUM_LOCK_INDEX, .active = false},
 #endif
 #ifdef KEYBOARD_LED_MAP
                                                   KEYBOARD_LED_MAP
 #endif
 };
+
+// Default colour per indicator state; keyboards add theirs via KEYBOARD_INDICATOR_COLORS.
+// The live table is host-editable and, on host-protocol keyboards, persisted.
+static const rgb_led_t indicator_default_colors[INDICATOR_COUNT][INDICATOR_MAX_STATES] = {
+    [INDICATOR_MACRO_REC] = {IND_COLOR_RED},
+    [INDICATOR_LEADER]    = {IND_COLOR_PEACH},
+    [INDICATOR_CAPS_LOCK] = {IND_COLOR_PEACH},
+    [INDICATOR_NUM_LOCK]  = {IND_COLOR_PEACH},
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+    [INDICATOR_SIGNALRGB] = {IND_COLOR_LAVENDER},
+#endif
+#ifdef KEYBOARD_INDICATOR_COLORS
+    KEYBOARD_INDICATOR_COLORS
+#endif
+};
+
+#define X(id, wire, states) [id] = wire,
+static const uint8_t indicator_wire_ids[INDICATOR_COUNT] = {SHARED_INDICATOR_IDS KEYBOARD_INDICATOR_IDS};
+#undef X
+#define X(id, wire, states) [id] = states,
+static const uint8_t indicator_state_counts[INDICATOR_COUNT] = {SHARED_INDICATOR_IDS KEYBOARD_INDICATOR_IDS};
+#undef X
+
+static rgb_led_t indicator_colors[INDICATOR_COUNT][INDICATOR_MAX_STATES];
+
+#if (EECONFIG_USER_DATA_SIZE) > 0
+_Static_assert(sizeof(user_data_t) <= (EECONFIG_USER_DATA_SIZE), "user_data_t does not fit EECONFIG_USER_DATA_SIZE");
+#endif
+
+static rgb_led_t indicator_current_color(uint8_t id) {
+    return indicator_colors[id][indicator_library[id].state];
+}
 
 // LED mask for FN layer rendering
 static bool mod_led_mask[RGB_MATRIX_LED_COUNT];
@@ -89,13 +124,20 @@ static void register_activity(void) {
     }
 }
 
+// A host command changed something visible (gaming mode, colours, settings):
+// counts as activity, so a dimmed keyboard wakes up and draws its indicators
+void host_activity(void) {
+    register_activity();
+}
+
 // (Re)start the auto-hide show window
 static void indicators_wake(void) {
     indicators_shown_at = timer_read32();
 }
 
 // Wake when an auto-hide indicator turns on/off or changes color (lock keys,
-// gaming profile switch). Leader/macro indicators are always shown anyway.
+// gaming profile switch, host colour edit). Leader/macro indicators are always
+// shown anyway.
 static void check_indicator_changes(void) {
     static bool      prev_active[INDICATOR_COUNT];
     static rgb_led_t prev_color[INDICATOR_COUNT];
@@ -103,9 +145,10 @@ static void check_indicator_changes(void) {
     for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
         indicator_t *ind = &indicator_library[i];
         if (ind->always_on) continue;
-        if (ind->active != prev_active[i] || memcmp(&ind->color, &prev_color[i], sizeof(rgb_led_t)) != 0) {
+        rgb_led_t color = indicator_current_color(i);
+        if (ind->active != prev_active[i] || memcmp(&color, &prev_color[i], sizeof(rgb_led_t)) != 0) {
             prev_active[i] = ind->active;
-            prev_color[i]  = ind->color;
+            prev_color[i]  = color;
             indicators_wake();
         }
     }
@@ -190,14 +233,87 @@ static void update_mod_led_mask(uint8_t fn_layer) {
     }
 }
 
+// --- PERSISTENCE ---
+
+static void user_config_load(void) {
+#if (EECONFIG_USER_DATA_SIZE) > 0
+    eeconfig_read_user_datablock(&user_config, offsetof(user_data_t, config), sizeof(user_config));
+#else
+    user_config.raw = eeconfig_read_user();
+#endif
+}
+
+void user_config_save(void) {
+#if (EECONFIG_USER_DATA_SIZE) > 0
+    eeconfig_update_user_datablock(&user_config, offsetof(user_data_t, config), sizeof(user_config));
+#else
+    eeconfig_update_user(user_config.raw);
+#endif
+}
+
+static void indicator_colors_load(void) {
+#if (EECONFIG_USER_DATA_SIZE) > 0
+    eeconfig_read_user_datablock(indicator_colors, offsetof(user_data_t, indicator_colors), sizeof(indicator_colors));
+#else
+    memcpy(indicator_colors, indicator_default_colors, sizeof(indicator_colors));
+#endif
+}
+
+static void indicator_color_save(uint8_t id, uint8_t state) {
+#if (EECONFIG_USER_DATA_SIZE) > 0
+    uint32_t offset = offsetof(user_data_t, indicator_colors) + (id * INDICATOR_MAX_STATES + state) * sizeof(rgb_led_t);
+    eeconfig_update_user_datablock(&indicator_colors[id][state], offset, sizeof(rgb_led_t));
+#endif
+}
+
 // --- PUBLIC API FUNCTIONS ---
 
 void eeconfig_init_user(void) {
+#if (EECONFIG_USER_DATA_SIZE) > 0
+    // Stamps the datablock version; a no-op rewrite after a full EEPROM reset
+    eeconfig_init_user_datablock();
+#endif
     user_config.version              = USER_CONFIG_VERSION;
     user_config.indicator_brightness = 255;
     user_config.bg_blackout_mode     = false;
     user_config.indicators_always_on = false;
-    eeconfig_update_user(user_config.raw);
+    user_config_save();
+    indicator_colors_reset(true);
+}
+
+user_config_t *get_user_config(void) {
+    return &user_config;
+}
+
+void indicators_set_always_on(bool always_on, bool persist) {
+    user_config.indicators_always_on = always_on;
+    if (persist) user_config_save();
+    indicators_wake();
+}
+
+uint8_t indicator_wire_id(uint8_t id) {
+    return indicator_wire_ids[id];
+}
+
+uint8_t indicator_state_count(uint8_t id) {
+    return indicator_state_counts[id];
+}
+
+rgb_led_t indicator_color_get(uint8_t id, uint8_t state) {
+    return indicator_colors[id][state];
+}
+
+void indicator_color_set(uint8_t id, uint8_t state, rgb_led_t color, bool persist) {
+    if (id >= INDICATOR_COUNT || state >= indicator_state_counts[id]) return;
+    indicator_colors[id][state] = color;
+    if (persist) indicator_color_save(id, state);
+}
+
+void indicator_colors_reset(bool persist) {
+    memcpy(indicator_colors, indicator_default_colors, sizeof(indicator_colors));
+#if (EECONFIG_USER_DATA_SIZE) > 0
+    if (persist) eeconfig_update_user_datablock(indicator_colors, offsetof(user_data_t, indicator_colors), sizeof(indicator_colors));
+#endif
 }
 
 // State access functions
@@ -222,11 +338,21 @@ void keyboard_post_init_shared(void) {
     dimming_state.saved_brightness   = 0;
     dimming_state.saved_mode         = RGB_MATRIX_SOLID_COLOR;
 
-    // Load user config from EEPROM (with version check)
-    user_config.raw = eeconfig_read_user();
-    if (user_config.version != USER_CONFIG_VERSION) {
+    // Load user config from EEPROM (with version check). Switching a keyboard
+    // to the datablock leaves an invalid version stamp behind, so it starts
+    // from defaults once.
+#if (EECONFIG_USER_DATA_SIZE) > 0
+    bool stored_valid = eeconfig_is_user_datablock_valid();
+#else
+    bool stored_valid = true;
+#endif
+    if (stored_valid) {
+        user_config_load();
+    }
+    if (!stored_valid || user_config.version != USER_CONFIG_VERSION) {
         eeconfig_init_user();
     }
+    indicator_colors_load();
 
     // Show indicators briefly on startup
     indicators_wake();
@@ -284,6 +410,10 @@ void matrix_scan_shared(void) {
         signalrgb_mode_disable();
 #    endif
     }
+#endif
+
+#ifdef HOST_PROTOCOL_ENABLE
+    host_protocol_task();
 #endif
 }
 
@@ -392,7 +522,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             if (record->event.pressed) {
                 if (user_config.bg_blackout_mode) {
                     user_config.bg_blackout_mode = false;
-                    eeconfig_update_user(user_config.raw);
+                    user_config_save();
                     rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP);
                 } else {
                     rgb_matrix_increase_val_noeeprom();
@@ -400,7 +530,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 // Sync indicator brightness to keyboard brightness (with floor)
                 uint8_t new_val                  = rgb_matrix_get_val();
                 user_config.indicator_brightness = new_val < MIN_INDICATOR_BRIGHTNESS ? MIN_INDICATOR_BRIGHTNESS : new_val;
-                eeconfig_update_user(user_config.raw);
+                user_config_save();
             }
             return false;
 
@@ -411,18 +541,18 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 if (current_val <= MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP) {
                     rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS);
                     user_config.bg_blackout_mode = true;
-                    eeconfig_update_user(user_config.raw);
+                    user_config_save();
                 } else {
                     if (user_config.bg_blackout_mode) {
                         user_config.bg_blackout_mode = false;
-                        eeconfig_update_user(user_config.raw);
+                        user_config_save();
                     }
                     rgb_matrix_decrease_val_noeeprom();
                 }
                 // Sync indicator brightness to keyboard brightness (with floor)
                 uint8_t new_val                  = rgb_matrix_get_val();
                 user_config.indicator_brightness = new_val < MIN_INDICATOR_BRIGHTNESS ? MIN_INDICATOR_BRIGHTNESS : new_val;
-                eeconfig_update_user(user_config.raw);
+                user_config_save();
             }
             return false;
 
@@ -458,7 +588,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             if (record->event.pressed) {
                 if (user_config.indicator_brightness < 255) {
                     user_config.indicator_brightness = (user_config.indicator_brightness + RGB_MATRIX_VAL_STEP > 255) ? 255 : user_config.indicator_brightness + RGB_MATRIX_VAL_STEP;
-                    eeconfig_update_user(user_config.raw);
+                    user_config_save();
                 }
             }
             return false;
@@ -466,15 +596,13 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             if (record->event.pressed) {
                 if (user_config.indicator_brightness > 0) {
                     user_config.indicator_brightness = (user_config.indicator_brightness < RGB_MATRIX_VAL_STEP) ? 0 : user_config.indicator_brightness - RGB_MATRIX_VAL_STEP;
-                    eeconfig_update_user(user_config.raw);
+                    user_config_save();
                 }
             }
             return false;
         case IND_MODE:
             if (record->event.pressed) {
-                user_config.indicators_always_on = !user_config.indicators_always_on;
-                eeconfig_update_user(user_config.raw);
-                indicators_wake();
+                indicators_set_always_on(!user_config.indicators_always_on, true);
             }
             return false;
     }
@@ -561,12 +689,13 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
     uint8_t visibility = indicator_visibility();
     for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
         if (indicator_library[i].active && indicator_library[i].led_index != 255) {
-            uint8_t led = indicator_library[i].led_index;
+            uint8_t   led   = indicator_library[i].led_index;
+            rgb_led_t color = indicator_current_color(i);
             // Scale brightness
             // Basic approximation: scale each component by the brightness ratio
-            uint8_t r = (indicator_library[i].color.r * (uint16_t)ind_brightness) / 255;
-            uint8_t g = (indicator_library[i].color.g * (uint16_t)ind_brightness) / 255;
-            uint8_t b = (indicator_library[i].color.b * (uint16_t)ind_brightness) / 255;
+            uint8_t r = (color.r * (uint16_t)ind_brightness) / 255;
+            uint8_t g = (color.g * (uint16_t)ind_brightness) / 255;
+            uint8_t b = (color.b * (uint16_t)ind_brightness) / 255;
 
             if (!indicator_library[i].always_on && visibility < 255) {
                 rgb_led_t base;
@@ -623,8 +752,19 @@ bool raw_hid_receive_shared(uint8_t src, uint8_t *data, uint8_t length) {
     // gets a reply, so a dropped query hangs its whole HID detection thread.
     // SET_MODE decides whether the matrix is in direct or a native effect; the
     // toggle key below only governs SignalRGB.
+#ifdef HOST_PROTOCOL_ENABLE
+    // --- Host protocol (0xC0–0xCF) ---
+    if (host_protocol_rx(data, length)) {
+        return true;
+    }
+#endif
+
 #ifdef OPENRGB_ENABLE
     if (data[0] >= 0x01 && data[0] <= 0x09) {
+#    ifdef HOST_PROTOCOL_ENABLE
+        // A protocol-version query opens every OpenRGB detection: stay quiet meanwhile
+        host_protocol_openrgb_command(data[0]);
+#    endif
         ext_rgb_state.last_activity = timer_read32();
         ext_rgb_state.active_source = EXT_RGB_OPENRGB;
         ext_rgb_state.timed_out     = false;

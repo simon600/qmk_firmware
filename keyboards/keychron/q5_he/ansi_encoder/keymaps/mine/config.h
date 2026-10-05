@@ -19,18 +19,24 @@
 // --- X-Macro Indicator Registry Configuration ---
 
 // Define keyboard-specific indicator IDs (extends SHARED_INDICATOR_IDS)
-#define KEYBOARD_INDICATOR_IDS X(INDICATOR_GAMING)
+// X(enum id, host wire id, states): gaming states are rapid trigger / gamepad
+#define KEYBOARD_INDICATOR_IDS X(INDICATOR_GAMING, 4, 2)
+#define GAMING_IND_RAPID 0
+#define GAMING_IND_GAMEPAD 1
 
 // Helper macro for conditional SignalRGB indicator mapping
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-#    define M_SIGNALRGB_INDICATOR(idx) [INDICATOR_SIGNALRGB] = {.led_index = idx, .color = IND_COLOR_LAVENDER, .always_on = true},
+#    define M_SIGNALRGB_INDICATOR(idx) [INDICATOR_SIGNALRGB] = {.led_index = idx, .always_on = true},
 #else
 #    define M_SIGNALRGB_INDICATOR(idx)
 #endif
 
-// Map indicator IDs to physical LED indices and colors
-// Format: [ID] = {.led_index = INDEX, .color = {R, G, B}}
-#define KEYBOARD_LED_MAP [INDICATOR_GAMING] = {.led_index = 14, .color = IND_COLOR_MAROON}, M_SIGNALRGB_INDICATOR(16)
+// Map indicator IDs to physical LED indices
+// Format: [ID] = {.led_index = INDEX}
+#define KEYBOARD_LED_MAP [INDICATOR_GAMING] = {.led_index = 14}, M_SIGNALRGB_INDICATOR(16)
+
+// Default colour per state (host-editable, stored in the user datablock)
+#define KEYBOARD_INDICATOR_COLORS [INDICATOR_GAMING] = {[GAMING_IND_RAPID] = IND_COLOR_MAROON, [GAMING_IND_GAMEPAD] = IND_COLOR_GREEN},
 
 #define OPENRGB_DEVICE_NAME "Keychron Q5 HE"
 #define OPENRGB_DEVICE_VENDOR "Keychron"

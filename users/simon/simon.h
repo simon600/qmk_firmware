@@ -47,7 +47,7 @@ enum custom_keycodes_shared {
 // --- INDICATOR COLORS ---
 // Catppuccin Macchiato hues with saturation pushed up: the palette's pastels
 // wash out to near-white on LEDs and vanish against a white backlight.
-// Usable as an initializer ({.color = IND_COLOR_PEACH}) or a compound literal
+// Defaults for the indicator colour table. Usable as an initializer or a compound literal
 // ((rgb_led_t)IND_COLOR_PEACH).
 #define IND_COLOR_PEACH {255, 110, 40}     // #f5a97f
 #define IND_COLOR_MAUVE {170, 80, 255}     // #c6a0f6
@@ -65,13 +65,19 @@ enum custom_keycodes_shared {
 #    define IF_EXT_RGB_ENABLED(x)
 #endif
 
+// Entry format: X(enum id, host wire id, number of states)
+// The wire id is how the host protocol addresses an indicator; it must stay
+// stable across keyboards and firmware versions (see host_protocol.h).
+// Each state has its own colour (e.g. gaming: rapid trigger / gamepad).
+#define INDICATOR_MAX_STATES 2
+
 // Universal indicators available in userspace
-#define SHARED_INDICATOR_IDS \
-    X(INDICATOR_MACRO_REC)   \
-    X(INDICATOR_LEADER)      \
-    X(INDICATOR_CAPS_LOCK)   \
-    X(INDICATOR_NUM_LOCK)    \
-    IF_EXT_RGB_ENABLED(X(INDICATOR_SIGNALRGB))
+#define SHARED_INDICATOR_IDS     \
+    X(INDICATOR_MACRO_REC, 1, 1) \
+    X(INDICATOR_LEADER, 2, 1)    \
+    X(INDICATOR_CAPS_LOCK, 5, 1) \
+    X(INDICATOR_NUM_LOCK, 6, 1)  \
+    IF_EXT_RGB_ENABLED(X(INDICATOR_SIGNALRGB, 3, 1))
 
 // Allow keyboards to extend with their own indicators
 #ifndef KEYBOARD_INDICATOR_IDS
@@ -79,7 +85,7 @@ enum custom_keycodes_shared {
 #endif
 
 // Generate enum from indicator IDs
-#define X(id) id,
+#define X(id, wire, states) id,
 enum indicator_ids { SHARED_INDICATOR_IDS KEYBOARD_INDICATOR_IDS INDICATOR_COUNT };
 #undef X
 
@@ -91,10 +97,10 @@ typedef struct {
 } color_t;
 
 typedef struct {
-    uint8_t   led_index; // Physical LED index (255 = disabled/unmapped)
-    bool      active;    // Whether indicator is currently active
-    rgb_led_t color;     // RGB color value
-    bool      always_on; // Exempt from auto-hide (shown for as long as it's active)
+    uint8_t led_index; // Physical LED index (255 = disabled/unmapped)
+    bool    active;    // Whether indicator is currently active
+    uint8_t state;     // Selects the colour in the indicator colour table
+    bool    always_on; // Exempt from auto-hide (shown for as long as it's active)
 } indicator_t;
 
 typedef struct {
@@ -132,6 +138,17 @@ typedef union {
     };
 } user_config_t;
 
+
+// --- USER EEPROM DATABLOCK ---
+// Keyboards running the host protocol keep user_config plus the indicator
+// colour table in a user datablock; the rest keep user_config in the 32-bit
+// user slot. Not for VIA keyboards: the datablock shifts the dynamic keymap.
+#if (EECONFIG_USER_DATA_SIZE) > 0
+typedef struct {
+    user_config_t config;
+    rgb_led_t     indicator_colors[INDICATOR_COUNT][INDICATOR_MAX_STATES];
+} user_data_t;
+#endif
 
 // --- GLOBAL INDICATOR REGISTRY ---
 extern indicator_t indicator_library[INDICATOR_COUNT];
@@ -180,4 +197,15 @@ void suspend_wakeup_init_shared(void);
 indicator_t *get_indicators(void);
 uint8_t      get_active_fn_layer(void);
 void         set_active_fn_layer(uint8_t layer);
+
+// Settings and indicator colours (used by the host protocol)
+user_config_t *get_user_config(void);
+void           user_config_save(void);
+void           indicators_set_always_on(bool always_on, bool persist);
+void           host_activity(void);
+uint8_t        indicator_wire_id(uint8_t id);
+uint8_t        indicator_state_count(uint8_t id);
+rgb_led_t      indicator_color_get(uint8_t id, uint8_t state);
+void           indicator_color_set(uint8_t id, uint8_t state, rgb_led_t color, bool persist);
+void           indicator_colors_reset(bool persist);
 

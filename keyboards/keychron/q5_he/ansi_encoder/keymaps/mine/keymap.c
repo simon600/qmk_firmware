@@ -3,6 +3,9 @@
 #include "simon.h"
 #include "print.h"
 #include "profile.h"
+#ifdef HOST_PROTOCOL_ENABLE
+#    include "host_protocol.h"
+#endif
 
 enum layers {
     MAC_BASE,
@@ -35,7 +38,8 @@ enum keymap_keycodes {
 #define MS QK_DYNAMIC_MACRO_RECORD_STOP
 
 bool           gaming_mode_enabled  = false;
-static uint8_t gaming_profile_state = 0; // 0=off, 1=profile1(maroon), 2=profile2(green)
+static uint8_t gaming_profile_state = 0; // 0=off, 1=profile1 (rapid trigger, maroon), 2=profile2 (gamepad, green)
+static uint8_t gaming_target        = 1; // HE profile to select when the GAMING layer turns on
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -203,6 +207,41 @@ static void init_custom_he_profiles(void) {
     update_travel_configs();
 }
 
+// --- GAMING MODE ---
+// 0 off, 1 rapid trigger (HE profile 1), 2 gamepad (HE profile 2).
+// TG_GMG cycles it; the host protocol (kbd-daemon) sets it directly.
+
+static void gaming_apply_profile(uint8_t state) {
+    gaming_profile_state = state;
+    profile_select(state, false);
+    get_indicators()[INDICATOR_GAMING].state = (state == 2) ? GAMING_IND_GAMEPAD : GAMING_IND_RAPID;
+}
+
+static void gaming_set(uint8_t state) {
+    if (state > 2) return;
+    if (state == 0) {
+        layer_off(GAMING); // layer_state_set_user restores profile 0
+    } else if (!layer_state_is(GAMING)) {
+        gaming_target = state;
+        layer_on(GAMING); // layer_state_set_user selects gaming_target
+        gaming_target = 1;
+    } else if (state != gaming_profile_state) {
+        gaming_apply_profile(state);
+    }
+}
+
+#ifdef HOST_PROTOCOL_ENABLE
+uint8_t host_gaming_state_user(void) {
+    return gaming_profile_state;
+}
+
+bool host_gaming_set_user(uint8_t state) {
+    if (state > 2) return false;
+    gaming_set(state);
+    return true;
+}
+#endif
+
 // --- QMK CALLBACK WRAPPERS ---
 
 void keyboard_post_init_user(void) {
@@ -220,20 +259,8 @@ void matrix_scan_user(void) {
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (keycode == TG_GMG && record->event.pressed) {
-        if (!layer_state_is(GAMING)) {
-            // Not in gaming layer: turn it on, profile 1
-            layer_on(GAMING);
-        } else if (gaming_profile_state == 1) {
-            // First press in gaming layer: switch to profile 2 (green)
-            gaming_profile_state = 2;
-            profile_select(2, false);
-            indicator_t *indicators            = get_indicators();
-            indicators[INDICATOR_GAMING].color = (rgb_led_t)IND_COLOR_GREEN;
-        } else {
-            // Second press in gaming layer: turn off
-            gaming_profile_state = 0;
-            layer_off(GAMING);
-        }
+        // Cycle off -> rapid trigger -> gamepad -> off
+        gaming_set(gaming_profile_state == 0 ? 1 : gaming_profile_state == 1 ? 2 : 0);
         return false;
     }
     return process_record_shared(keycode, record);
@@ -246,11 +273,8 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     bool gaming_active  = layer_state_cmp(state, GAMING);
 
     if (!gaming_mode_enabled && gaming_active) {
-        // Layer just turned on: set profile 1 and reset indicator to maroon
-        gaming_profile_state = 1;
-        profile_select(1, false);
-        indicator_t *indicators            = get_indicators();
-        indicators[INDICATOR_GAMING].color = (rgb_led_t)IND_COLOR_MAROON;
+        // Layer just turned on: select the requested profile (rapid trigger by default)
+        gaming_apply_profile(gaming_target);
     } else if (gaming_mode_enabled && !gaming_active) {
         // Layer just turned off: reset to profile 0
         gaming_profile_state = 0;
