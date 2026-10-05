@@ -10,6 +10,8 @@ On the **`WIN_BASE`** layer (located at the **F14** position, next to `Delete`):
 - **Press 2**: Switches to **Profile 2 (Gamepad Mode)** & illuminates LED in **Green**.
 - **Press 3**: Deactivates `GAMING` layer + returns to **Profile 0 (Default / Typing)** & restores standard lighting.
 
+The LED follows the indicator auto-hide setting: it shows for 2 s after each change (or while a layer key is held) and then fades out. Toggle always-on with **Hardware + I** (`IND_MODE`).
+
 ### 2. Built-in Keychron Hardware Shortcut
 Hold **`Fn + P`** together, then press:
 - **`X`** $\rightarrow$ **Profile 0** (Default / Typing Mode)

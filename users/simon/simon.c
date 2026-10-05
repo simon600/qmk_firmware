@@ -29,6 +29,10 @@ static bool            suspended = false; // Suspend state tracker
 
 static user_config_t user_config;
 
+// Auto-hide: indicators are fully visible for INDICATOR_SHOW_MS after this
+// timestamp, then fade out over INDICATOR_FADE_MS
+static uint32_t indicators_shown_at;
+
 #define MIN_SAFE_BRIGHTNESS 50
 #define MIN_INDICATOR_BRIGHTNESS 16
 #ifndef RGB_MATRIX_VAL_STEP
@@ -44,8 +48,14 @@ static ext_rgb_state_t ext_rgb_state = {0};
 // Initialize with defaults: all LED indices to 255 (disabled), inactive, black color
 // Keyboard-specific mappings are applied via KEYBOARD_LED_MAP macro
 indicator_t indicator_library[INDICATOR_COUNT] = {[0 ... INDICATOR_COUNT - 1] = {.led_index = 255, .active = false, .color = {0, 0, 0}},
-                                                  [INDICATOR_MACRO_REC]       = {.led_index = 255, .active = false, .color = {255, 0, 0}},
-                                                  [INDICATOR_LEADER]          = {.led_index = 255, .active = false, .color = {255, 255, 255}},
+                                                  [INDICATOR_MACRO_REC]       = {.led_index = 255, .active = false, .color = {255, 0, 0}, .always_on = true},
+                                                  [INDICATOR_LEADER]          = {.led_index = 255, .active = false, .color = {255, 255, 255}, .always_on = true},
+#ifdef CAPS_LOCK_INDEX
+                                                  [INDICATOR_CAPS_LOCK] = {.led_index = CAPS_LOCK_INDEX, .active = false, .color = {255, 255, 255}},
+#endif
+#ifdef NUM_LOCK_INDEX
+                                                  [INDICATOR_NUM_LOCK] = {.led_index = NUM_LOCK_INDEX, .active = false, .color = {0, 255, 255}},
+#endif
 #ifdef KEYBOARD_LED_MAP
                                                   KEYBOARD_LED_MAP
 #endif
@@ -77,6 +87,80 @@ static void register_activity(void) {
 
         dimming_state.is_dimmed = false;
     }
+}
+
+// (Re)start the auto-hide show window
+static void indicators_wake(void) {
+    indicators_shown_at = timer_read32();
+}
+
+// Wake when an auto-hide indicator turns on/off or changes color (lock keys,
+// gaming profile switch). Leader/macro indicators are always shown anyway.
+static void check_indicator_changes(void) {
+    static bool      prev_active[INDICATOR_COUNT];
+    static rgb_led_t prev_color[INDICATOR_COUNT];
+
+    for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
+        indicator_t *ind = &indicator_library[i];
+        if (ind->always_on) continue;
+        if (ind->active != prev_active[i] || memcmp(&ind->color, &prev_color[i], sizeof(rgb_led_t)) != 0) {
+            prev_active[i] = ind->active;
+            prev_color[i]  = ind->color;
+            indicators_wake();
+        }
+    }
+}
+
+// 255 = fully shown, 0 = hidden, in between = fading out
+static uint8_t indicator_visibility(void) {
+    // Always visible while a momentary layer is held; the window restarts on release
+    if (user_config.indicators_always_on || active_fn_layer != 0) {
+        return 255;
+    }
+    uint32_t elapsed = timer_elapsed32(indicators_shown_at);
+    if (elapsed < INDICATOR_SHOW_MS) {
+        return 255;
+    }
+    elapsed -= INDICATOR_SHOW_MS;
+    if (elapsed >= INDICATOR_FADE_MS) {
+        return 0;
+    }
+    return 255 - elapsed * 255 / INDICATOR_FADE_MS;
+}
+
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+extern rgb_led_t srgb_led_buffer[];
+#endif
+
+// The color the current effect drew under an indicator, so it can fade into
+// it. There's no read-back API, so this only covers modes where it can be
+// computed; anything else returns false and the indicator just switches off.
+static bool get_base_color(uint8_t led, rgb_led_t *out) {
+    if (user_config.bg_blackout_mode) {
+        *out = (rgb_led_t){0, 0, 0};
+        return true;
+    }
+    switch (rgb_matrix_get_mode()) {
+        case RGB_MATRIX_SOLID_COLOR:
+            *out = hsv_to_rgb(rgb_matrix_get_hsv());
+            return true;
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+        case RGB_MATRIX_CUSTOM_SIGNALRGB: {
+            // Same scaling as the SIGNALRGB effect in rgb_matrix_user.inc
+            uint8_t val = rgb_matrix_get_val();
+            out->r      = (uint16_t)srgb_led_buffer[led].r * val / 255;
+            out->g      = (uint16_t)srgb_led_buffer[led].g * val / 255;
+            out->b      = (uint16_t)srgb_led_buffer[led].b * val / 255;
+            return true;
+        }
+#endif
+        default:
+            return false;
+    }
+}
+
+static uint8_t blend(uint8_t from, uint8_t to, uint8_t amount) {
+    return from + ((int16_t)to - from) * amount / 255;
 }
 
 // Update the LED mask based on the active FN layer
@@ -112,6 +196,7 @@ void eeconfig_init_user(void) {
     user_config.version              = USER_CONFIG_VERSION;
     user_config.indicator_brightness = 255;
     user_config.bg_blackout_mode     = false;
+    user_config.indicators_always_on = false;
     eeconfig_update_user(user_config.raw);
 }
 
@@ -143,6 +228,9 @@ void keyboard_post_init_shared(void) {
         eeconfig_init_user();
     }
 
+    // Show indicators briefly on startup
+    indicators_wake();
+
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
     // No source claim and no direct-mode switch here: active_source means "who is
     // currently driving the LEDs", which only real HID traffic can establish, and
@@ -155,16 +243,22 @@ void keyboard_post_init_shared(void) {
 #endif
 
 #ifdef KEYCHRON_RGB_ENABLE
-    // Disable caps_lock and num_lock indicators by default
-    // Keychron Launcher can still re-enable and persist via HID
+    // Caps/num lock are drawn by our own indicators (with auto-hide), so keep
+    // Keychron's always-on versions off. Keychron Launcher can still re-enable
+    // and persist them via HID until the next boot.
     extern os_indicator_config_t os_ind_cfg;
-    os_ind_cfg.disable.caps_lock = false;
+    os_ind_cfg.disable.caps_lock = true;
     os_ind_cfg.disable.num_lock  = true;
 #endif
 }
 
 void matrix_scan_shared(void) {
     if (suspended) return;
+
+    led_t host_leds                               = host_keyboard_led_state();
+    indicator_library[INDICATOR_CAPS_LOCK].active = host_leds.caps_lock;
+    indicator_library[INDICATOR_NUM_LOCK].active  = host_leds.num_lock;
+    check_indicator_changes();
 
     // Check for inactivity timeout
     uint32_t elapsed = timer_elapsed32(dimming_state.last_activity_time);
@@ -376,6 +470,13 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 }
             }
             return false;
+        case IND_MODE:
+            if (record->event.pressed) {
+                user_config.indicators_always_on = !user_config.indicators_always_on;
+                eeconfig_update_user(user_config.raw);
+                indicators_wake();
+            }
+            return false;
     }
 
     return true;
@@ -389,11 +490,18 @@ layer_state_t layer_state_set_shared(layer_state_t state) {
     // This function primarily updates the LED mask when layer state changes
     // The actual layer tracking should be done in the keymap
 
+    // Any layer change (holding space/Fn/hardware key, gaming toggle) brings
+    // the indicators back
+    static layer_state_t last_state = 0;
+    if (state != last_state) {
+        last_state = state;
+        indicators_wake();
+    }
+
     return state;
 }
 
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-extern rgb_led_t srgb_led_buffer[];
 static uint8_t get_ext_rgb_max_brightness(void) {
     uint8_t max_val = 0;
     for (uint8_t i = 0; i < RGB_MATRIX_LED_COUNT; i++) {
@@ -449,15 +557,27 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
         }
     }
 
-    // Render active indicators (top layer, always visible)
+    // Render active indicators (top layer)
+    uint8_t visibility = indicator_visibility();
     for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
         if (indicator_library[i].active && indicator_library[i].led_index != 255) {
+            uint8_t led = indicator_library[i].led_index;
             // Scale brightness
             // Basic approximation: scale each component by the brightness ratio
             uint8_t r = (indicator_library[i].color.r * (uint16_t)ind_brightness) / 255;
             uint8_t g = (indicator_library[i].color.g * (uint16_t)ind_brightness) / 255;
             uint8_t b = (indicator_library[i].color.b * (uint16_t)ind_brightness) / 255;
-            rgb_matrix_set_color(indicator_library[i].led_index, r, g, b);
+
+            if (!indicator_library[i].always_on && visibility < 255) {
+                rgb_led_t base;
+                if (visibility == 0 || !get_base_color(led, &base)) {
+                    continue; // Hidden: leave the effect's color alone
+                }
+                r = blend(base.r, r, visibility);
+                g = blend(base.g, g, visibility);
+                b = blend(base.b, b, visibility);
+            }
+            rgb_matrix_set_color(led, r, g, b);
         }
     }
 
@@ -604,4 +724,5 @@ void suspend_power_down_shared(void) {
 void suspend_wakeup_init_shared(void) {
     suspended = false;
     register_activity();
+    indicators_wake();
 }

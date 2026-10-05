@@ -17,6 +17,7 @@ enum custom_keycodes_shared {
     M_NM,
     IND_BR_U,
     IND_BR_D,
+    IND_MODE, // Toggle indicators between always-on and auto-hide
     SAFE_RANGE_SHARED, // For keymaps to extend
 };
 
@@ -34,6 +35,15 @@ enum custom_keycodes_shared {
 // Inactivity timeout: 5 minutes in milliseconds
 #define INACTIVITY_TIMEOUT_MS 300000
 
+// Auto-hide indicators: how long they stay up after a layer change or state
+// change, and how long they take to fade back into the key's regular color
+#ifndef INDICATOR_SHOW_MS
+#    define INDICATOR_SHOW_MS 2000
+#endif
+#ifndef INDICATOR_FADE_MS
+#    define INDICATOR_FADE_MS 500
+#endif
+
 // --- INDICATOR REGISTRY (X-Macro System) ---
 
 // Helper macro for conditional external RGB indicator
@@ -47,6 +57,8 @@ enum custom_keycodes_shared {
 #define SHARED_INDICATOR_IDS \
     X(INDICATOR_MACRO_REC)   \
     X(INDICATOR_LEADER)      \
+    X(INDICATOR_CAPS_LOCK)   \
+    X(INDICATOR_NUM_LOCK)    \
     IF_EXT_RGB_ENABLED(X(INDICATOR_SIGNALRGB))
 
 // Allow keyboards to extend with their own indicators
@@ -70,6 +82,7 @@ typedef struct {
     uint8_t   led_index; // Physical LED index (255 = disabled/unmapped)
     bool      active;    // Whether indicator is currently active
     rgb_led_t color;     // RGB color value
+    bool      always_on; // Exempt from auto-hide (shown for as long as it's active)
 } indicator_t;
 
 typedef struct {
@@ -103,6 +116,7 @@ typedef union {
         uint8_t version;              // byte 0: data version id
         uint8_t indicator_brightness; // byte 1
         bool    bg_blackout_mode;     // byte 2
+        bool    indicators_always_on; // byte 3: false = auto-hide after INDICATOR_SHOW_MS
     };
 } user_config_t;
 

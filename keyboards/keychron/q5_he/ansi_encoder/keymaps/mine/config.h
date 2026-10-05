@@ -23,7 +23,7 @@
 
 // Helper macro for conditional SignalRGB indicator mapping
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-#    define M_SIGNALRGB_INDICATOR(idx) [INDICATOR_SIGNALRGB] = {.led_index = idx, .color = {255, 255, 255}},
+#    define M_SIGNALRGB_INDICATOR(idx) [INDICATOR_SIGNALRGB] = {.led_index = idx, .color = {255, 255, 255}, .always_on = true},
 #else
 #    define M_SIGNALRGB_INDICATOR(idx)
 #endif

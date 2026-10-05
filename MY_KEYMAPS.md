@@ -69,6 +69,7 @@ Record and replay keystroke macros on the fly without reflashing.
 | `TG_GMG` | Toggle Gaming Mode / Profile | Cycle between Normal ➔ Gaming Profile 1 (Red LED) ➔ Gaming Profile 2 (Green LED) ➔ Normal (Q5 HE only). |
 | `IND_BR_U` | Increase Indicator Brightness | Increases indicator LED brightness in EEPROM. |
 | `IND_BR_D` | Decrease Indicator Brightness | Decreases indicator LED brightness in EEPROM. |
+| `IND_MODE` | Toggle Indicator Mode | Switches indicators between **auto-hide** (default) and **always on**; saved in EEPROM. Mapped to <kbd>I</kbd> on `HARDWARE`. |
 
 ---
 
@@ -109,6 +110,12 @@ Record and replay keystroke macros on the fly without reflashing.
   - Wakes up immediately upon any key press or incoming USB/HID activity.
 - **FN Layer Key Masking**:
   - Activating `MAC_FN`, `WIN_FN`, or `HARDWARE` automatically highlights active keys in solid white and blacks out unmapped keys for clear visual feedback.
+- **Indicators & Auto-Hide**:
+  - Caps Lock (**White**, on the Caps Lock key) and Num Lock (**Cyan**, Q5 HE only) indicators replace Keychron's built-in ones.
+  - In auto-hide mode (default), status indicators (Caps Lock, Num Lock, Gaming) show for **2 s** and then fade into the key's regular color over **500 ms**. They come back on startup/wake, on any layer change (holding Space/Fn/Hardware key), and whenever an indicator turns on, off or changes color. While a layer key is held they stay visible; the 2 s window starts on release.
+  - The fade blends into the regular color in Solid Color and OpenRGB/SignalRGB direct modes; in other effects the indicator just switches off.
+  - Leader and Macro Recording indicators are never hidden while active.
+  - `IND_MODE` (<kbd>Hardware</kbd> + <kbd>I</kbd>) toggles between auto-hide and always on.
 - **External RGB (SignalRGB & OpenRGB)**:
   - `UG_SRGB` toggles external RGB synchronization.
   - External RGB indicator (LED index 36 on Q5 HE):
