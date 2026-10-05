@@ -81,7 +81,7 @@ Record and replay keystroke macros on the fly without reflashing.
 - **Caps Lock Modifier-Tap**:
   - Mac Base: `GUI_T(KC_ESC)` — Escape on tap, Command (`GUI`) on hold. Permissive hold enabled.
   - Windows Base: `LCTL_T(KC_ESC)` — Escape on tap, `Control` on hold. Permissive hold enabled.
-  - Windows Base (Q5 HE): plain `KC_ESC` top-left; `KC_HYPR` (`Ctrl+Shift+Alt+Gui`) on the key between the gaming toggle and the Hardware key.
+  - Q5 HE: plain `KC_ESC` top-left; `KC_HYPR` (`Ctrl+Shift+Alt+Gui`) on the key left of the Hardware key (Mac and Windows base layers).
 - **HJKL Arrow Navigation**:
   - On `MAC_FN` and `WIN_FN`, <kbd>H</kbd>, <kbd>J</kbd>, <kbd>K</kbd>, <kbd>L</kbd> are mapped to <kbd>Left</kbd>, <kbd>Down</kbd>, <kbd>Up</kbd>, <kbd>Right</kbd> (Vim-style navigation).
 - **Backspace & Delete**:
