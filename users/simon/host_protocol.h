@@ -31,7 +31,8 @@
 //                       never for changes a host command made
 //
 // Indicator wire ids: 1 macro recording, 2 leader, 3 external RGB (Hardware
-// key), 4 gaming (states: rapid trigger, gamepad), 5 caps lock, 6 num lock
+// key), 4 gaming (states: rapid trigger, gamepad), 5 caps lock, 6 num lock,
+// 7 fn layer (colour of the keys bound on a held FN layer; no LED of its own)
 //
 // State block:
 //   [1] gaming state (0 off, 1 rapid, 2 gamepad, 255 unsupported)

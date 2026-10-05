@@ -109,7 +109,7 @@ Record and replay keystroke macros on the fly without reflashing.
   - After 5 minutes (300,000 ms) of idle time, RGB automatically dims to minimum (`val=1`) to preserve LEDs.
   - Wakes up immediately upon any key press or incoming USB/HID activity.
 - **FN Layer Key Masking**:
-  - Activating `MAC_FN`, `WIN_FN`, or `HARDWARE` automatically highlights active keys in solid white and blacks out unmapped keys for clear visual feedback.
+  - Activating `MAC_FN`, `WIN_FN`, or `HARDWARE` automatically highlights active keys in the `fn-layer` indicator colour (peach by default; `kbd-ctl color fn-layer 0 '#rrggbb' --save`) and dims unmapped keys to 25% of their regular colour (black in effects whose colour can't be computed), the same ratio as the OpenRGB submap highlight.
 - **Indicator Colors**: Catppuccin Macchiato hues with boosted saturation (pastels wash out on LEDs), defined once as `IND_COLOR_*` in `users/simon/simon.h`. They are the defaults of a per-indicator, per-state colour table; on the Q5 HE the table is host-editable over the host protocol (below) and stored in the user EEPROM datablock.
 - **Indicators & Auto-Hide**:
   - Caps Lock (on the Caps Lock key) and Num Lock (Q5 HE only), both **Peach**, indicators replace Keychron's built-in ones.
@@ -162,7 +162,7 @@ See full details in **[`keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/READM
 
 - **Sharing the interface with OpenRGB**: Linux delivers every input report to every process with the hidraw node open, and OpenRGB takes the first report it reads as its answer. So writes never reply, and for 1 s after OpenRGB's protocol-version query (`0x01`, which opens every detection) host replies are dropped and notifications held.
 - **Notifications** only cover changes made on the keyboard (`TG_GMG`, `Fn + P`, `IND_MODE`, indicator brightness keys), coalesced to one per 100 ms; changes a host command made are not echoed.
-- **Indicator wire ids** (stable across keyboards): `1` macro recording, `2` leader, `3` external RGB, `4` gaming (rapid / gamepad), `5` caps lock, `6` num lock. A host colour edit wakes auto-hidden indicators so the change is visible.
+- **Indicator wire ids** (stable across keyboards): `1` macro recording, `2` leader, `3` external RGB, `4` gaming (rapid / gamepad), `5` caps lock, `6` num lock, `7` fn layer (colour of the keys bound on a held FN layer; no LED of its own). A host colour edit wakes auto-hidden indicators so the change is visible.
 - **EEPROM**: host-protocol keyboards keep `user_config` and the colour table in a 64-byte user datablock (`EECONFIG_USER_DATA_SIZE`). The first boot after switching to it starts from defaults once. Not for VIA keyboards (Q1 v2): the datablock would shift the dynamic keymap.
 
 ---

@@ -77,6 +77,7 @@ enum custom_keycodes_shared {
     X(INDICATOR_LEADER, 2, 1)    \
     X(INDICATOR_CAPS_LOCK, 5, 1) \
     X(INDICATOR_NUM_LOCK, 6, 1)  \
+    X(INDICATOR_FN_LAYER, 7, 1)  \
     IF_EXT_RGB_ENABLED(X(INDICATOR_SIGNALRGB, 3, 1))
 
 // Allow keyboards to extend with their own indicators

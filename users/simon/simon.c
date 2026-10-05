@@ -38,6 +38,9 @@ static uint32_t indicators_shown_at;
 
 #define MIN_SAFE_BRIGHTNESS 50
 #define MIN_INDICATOR_BRIGHTNESS 16
+// Brightness of keys without a binding while an FN layer is held (64/255 =
+// 25%, the same ratio as openrgb-daemon's submap highlight `dim = 0.25`)
+#define FN_LAYER_DIM 64
 #ifndef RGB_MATRIX_VAL_STEP
 #    define RGB_MATRIX_VAL_STEP 8
 #endif
@@ -71,6 +74,8 @@ static const rgb_led_t indicator_default_colors[INDICATOR_COUNT][INDICATOR_MAX_S
     [INDICATOR_LEADER]    = {IND_COLOR_PEACH},
     [INDICATOR_CAPS_LOCK] = {IND_COLOR_PEACH},
     [INDICATOR_NUM_LOCK]  = {IND_COLOR_PEACH},
+    // Colour-only: the keys bound on a held FN layer (no LED of its own)
+    [INDICATOR_FN_LAYER]  = {IND_COLOR_PEACH},
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
     [INDICATOR_SIGNALRGB] = {IND_COLOR_LAVENDER},
 #endif
@@ -673,12 +678,19 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
         for (uint8_t i = led_min; i < led_max; i++) {
             if (i < RGB_MATRIX_LED_COUNT) {
                 if (mod_led_mask[i]) {
-                    // Scale brightness
-                    uint8_t v = (255 * (uint16_t)ind_brightness) / 255;
-                    rgb_matrix_set_color(i, v, v, v);
+                    // Bound keys in the fn-layer indicator colour, at indicator brightness
+                    rgb_led_t c = indicator_colors[INDICATOR_FN_LAYER][0];
+                    rgb_matrix_set_color(i, c.r * ind_brightness / 255, c.g * ind_brightness / 255, c.b * ind_brightness / 255);
                 } else if (!rgb_adjusted_in_fn) {
-                    // Only black out if RGB hasn't been adjusted
-                    rgb_matrix_set_color(i, 0, 0, 0);
+                    // Keys without a binding on the layer dim to FN_LAYER_DIM of
+                    // their regular colour (black where it can't be computed),
+                    // unless RGB was adjusted while the layer was held
+                    rgb_led_t base;
+                    if (get_base_color(i, &base)) {
+                        rgb_matrix_set_color(i, base.r * FN_LAYER_DIM / 255, base.g * FN_LAYER_DIM / 255, base.b * FN_LAYER_DIM / 255);
+                    } else {
+                        rgb_matrix_set_color(i, 0, 0, 0);
+                    }
                 }
                 // Otherwise, let the RGB matrix show (either QMK effects or SignalRGB)
             }
