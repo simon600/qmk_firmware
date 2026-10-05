@@ -23,14 +23,14 @@
 
 // Helper macro for conditional SignalRGB indicator mapping
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
-#    define M_SIGNALRGB_INDICATOR(idx) [INDICATOR_SIGNALRGB] = {.led_index = idx, .color = {255, 255, 255}, .always_on = true},
+#    define M_SIGNALRGB_INDICATOR(idx) [INDICATOR_SIGNALRGB] = {.led_index = idx, .color = IND_COLOR_LAVENDER, .always_on = true},
 #else
 #    define M_SIGNALRGB_INDICATOR(idx)
 #endif
 
 // Map indicator IDs to physical LED indices and colors
 // Format: [ID] = {.led_index = INDEX, .color = {R, G, B}}
-#define KEYBOARD_LED_MAP [INDICATOR_GAMING] = {.led_index = 14, .color = {255, 0, 0}}, M_SIGNALRGB_INDICATOR(36)
+#define KEYBOARD_LED_MAP [INDICATOR_GAMING] = {.led_index = 14, .color = IND_COLOR_MAROON}, M_SIGNALRGB_INDICATOR(36)
 
 #define OPENRGB_DEVICE_NAME "Keychron Q5 HE"
 #define OPENRGB_DEVICE_VENDOR "Keychron"

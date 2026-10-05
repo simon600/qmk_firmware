@@ -44,6 +44,18 @@ enum custom_keycodes_shared {
 #    define INDICATOR_FADE_MS 500
 #endif
 
+// --- INDICATOR COLORS ---
+// Catppuccin Macchiato hues with saturation pushed up: the palette's pastels
+// wash out to near-white on LEDs and vanish against a white backlight.
+// Usable as an initializer ({.color = IND_COLOR_PEACH}) or a compound literal
+// ((rgb_led_t)IND_COLOR_PEACH).
+#define IND_COLOR_PEACH {255, 110, 40}     // #f5a97f
+#define IND_COLOR_MAUVE {170, 80, 255}     // #c6a0f6
+#define IND_COLOR_RED {255, 40, 70}        // #ed8796
+#define IND_COLOR_MAROON {255, 60, 60}     // #ee99a0
+#define IND_COLOR_GREEN {90, 255, 70}      // #a6da95
+#define IND_COLOR_LAVENDER {140, 150, 255} // #b7bdf8
+
 // --- INDICATOR REGISTRY (X-Macro System) ---
 
 // Helper macro for conditional external RGB indicator

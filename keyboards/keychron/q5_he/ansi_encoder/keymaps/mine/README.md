@@ -6,7 +6,7 @@ There are two primary ways to switch profiles on your keyboard:
 
 ### 1. Dedicated Keymap Cycle Key (`TG_GMG`)
 On the **`WIN_BASE`** layer (located at the **F14** position, next to `Delete`):
-- **Press 1**: Activates `GAMING` layer + switches to **Profile 1 (Gaming / Rapid Trigger)** & illuminates LED in **Red**.
+- **Press 1**: Activates `GAMING` layer + switches to **Profile 1 (Gaming / Rapid Trigger)** & illuminates LED in **Maroon**.
 - **Press 2**: Switches to **Profile 2 (Gamepad Mode)** & illuminates LED in **Green**.
 - **Press 3**: Deactivates `GAMING` layer + returns to **Profile 0 (Default / Typing)** & restores standard lighting.
 

@@ -35,7 +35,7 @@ enum keymap_keycodes {
 #define MS QK_DYNAMIC_MACRO_RECORD_STOP
 
 bool           gaming_mode_enabled  = false;
-static uint8_t gaming_profile_state = 0; // 0=off, 1=profile1(red), 2=profile2(green)
+static uint8_t gaming_profile_state = 0; // 0=off, 1=profile1(maroon), 2=profile2(green)
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -228,7 +228,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             gaming_profile_state = 2;
             profile_select(2, false);
             indicator_t *indicators            = get_indicators();
-            indicators[INDICATOR_GAMING].color = (rgb_led_t){0, 255, 0};
+            indicators[INDICATOR_GAMING].color = (rgb_led_t)IND_COLOR_GREEN;
         } else {
             // Second press in gaming layer: turn off
             gaming_profile_state = 0;
@@ -246,11 +246,11 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     bool gaming_active  = layer_state_cmp(state, GAMING);
 
     if (!gaming_mode_enabled && gaming_active) {
-        // Layer just turned on: set profile 1 and reset indicator to red
+        // Layer just turned on: set profile 1 and reset indicator to maroon
         gaming_profile_state = 1;
         profile_select(1, false);
         indicator_t *indicators            = get_indicators();
-        indicators[INDICATOR_GAMING].color = (rgb_led_t){255, 0, 0};
+        indicators[INDICATOR_GAMING].color = (rgb_led_t)IND_COLOR_MAROON;
     } else if (gaming_mode_enabled && !gaming_active) {
         // Layer just turned off: reset to profile 0
         gaming_profile_state = 0;

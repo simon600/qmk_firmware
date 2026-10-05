@@ -48,13 +48,13 @@ static ext_rgb_state_t ext_rgb_state = {0};
 // Initialize with defaults: all LED indices to 255 (disabled), inactive, black color
 // Keyboard-specific mappings are applied via KEYBOARD_LED_MAP macro
 indicator_t indicator_library[INDICATOR_COUNT] = {[0 ... INDICATOR_COUNT - 1] = {.led_index = 255, .active = false, .color = {0, 0, 0}},
-                                                  [INDICATOR_MACRO_REC]       = {.led_index = 255, .active = false, .color = {255, 0, 0}, .always_on = true},
-                                                  [INDICATOR_LEADER]          = {.led_index = 255, .active = false, .color = {255, 255, 255}, .always_on = true},
+                                                  [INDICATOR_MACRO_REC]       = {.led_index = 255, .active = false, .color = IND_COLOR_RED, .always_on = true},
+                                                  [INDICATOR_LEADER]          = {.led_index = 255, .active = false, .color = IND_COLOR_PEACH, .always_on = true},
 #ifdef CAPS_LOCK_INDEX
-                                                  [INDICATOR_CAPS_LOCK] = {.led_index = CAPS_LOCK_INDEX, .active = false, .color = {255, 255, 255}},
+                                                  [INDICATOR_CAPS_LOCK] = {.led_index = CAPS_LOCK_INDEX, .active = false, .color = IND_COLOR_PEACH},
 #endif
 #ifdef NUM_LOCK_INDEX
-                                                  [INDICATOR_NUM_LOCK] = {.led_index = NUM_LOCK_INDEX, .active = false, .color = {0, 255, 255}},
+                                                  [INDICATOR_NUM_LOCK] = {.led_index = NUM_LOCK_INDEX, .active = false, .color = IND_COLOR_PEACH},
 #endif
 #ifdef KEYBOARD_LED_MAP
                                                   KEYBOARD_LED_MAP

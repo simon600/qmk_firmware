@@ -26,7 +26,7 @@ The Leader key allows executing sequences with a single prefix tap.
   - `LEADER_PER_KEY_TIMING` enabled.
   - `LEADER_TIMEOUT`: `250ms` timeout per keypress.
 - **LED Indicator**:
-  - `INDICATOR_LEADER` lights up dynamically in **White** on the key you pressed to activate Leader mode and turns off once the sequence ends.
+  - `INDICATOR_LEADER` lights up dynamically in **Peach** on the key you pressed to activate Leader mode and turns off once the sequence ends.
 
 ### Leader Key Sequences
 
@@ -52,7 +52,7 @@ Record and replay keystroke macros on the fly without reflashing.
 | `MP2` (`QK_DYNAMIC_MACRO_PLAY_2`) | Playback Macro 2 | <kbd>2</kbd> |
 
 - **Macro Recording Indicator**:
-  - `INDICATOR_MACRO_REC` turns **Red** on the activator key while recording is in progress.
+  - `INDICATOR_MACRO_REC` turns **Red** (Catppuccin) on the activator key while recording is in progress.
 - **Gaming Layer Macro Controls (Q5 HE)**:
   - `GAMING` layer has `MP1` and `MP2` mapped to Numpad <kbd>1</kbd> and <kbd>2</kbd>.
   - `GAMING2` layer (accessed via Numpad <kbd>0</kbd> hold) has `MR1` and `MR2` mapped to Numpad <kbd>1</kbd> and <kbd>2</kbd>.
@@ -66,7 +66,7 @@ Record and replay keystroke macros on the fly without reflashing.
 | `M_NW` | `Ctrl + Right` ➔ `Ctrl + Right` ➔ `Ctrl + Left` | **Next Word Jump (Windows)**: Jumps to the beginning of the next word. Mapped to <kbd>E</kbd> on `WIN_FN`. |
 | `M_NM` | `Alt + Right` ➔ `Alt + Right` ➔ `Alt + Left` | **Next Word Jump (macOS)**: Jumps to the beginning of the next word. Mapped to <kbd>E</kbd> on `MAC_FN`. |
 | `CW_TOGG` | Caps Word Toggle | Toggles Caps Word (mapped to <kbd>Tab</kbd> position in FN layers). |
-| `TG_GMG` | Toggle Gaming Mode / Profile | Cycle between Normal ➔ Gaming Profile 1 (Red LED) ➔ Gaming Profile 2 (Green LED) ➔ Normal (Q5 HE only). |
+| `TG_GMG` | Toggle Gaming Mode / Profile | Cycle between Normal ➔ Gaming Profile 1 (Maroon LED) ➔ Gaming Profile 2 (Green LED) ➔ Normal (Q5 HE only). |
 | `IND_BR_U` | Increase Indicator Brightness | Increases indicator LED brightness in EEPROM. |
 | `IND_BR_D` | Decrease Indicator Brightness | Decreases indicator LED brightness in EEPROM. |
 | `IND_MODE` | Toggle Indicator Mode | Switches indicators between **auto-hide** (default) and **always on**; saved in EEPROM. Mapped to <kbd>I</kbd> on `HARDWARE`. |
@@ -110,18 +110,16 @@ Record and replay keystroke macros on the fly without reflashing.
   - Wakes up immediately upon any key press or incoming USB/HID activity.
 - **FN Layer Key Masking**:
   - Activating `MAC_FN`, `WIN_FN`, or `HARDWARE` automatically highlights active keys in solid white and blacks out unmapped keys for clear visual feedback.
+- **Indicator Colors**: Catppuccin Macchiato hues with boosted saturation (pastels wash out on LEDs), defined once as `IND_COLOR_*` in `users/simon/simon.h`.
 - **Indicators & Auto-Hide**:
-  - Caps Lock (**White**, on the Caps Lock key) and Num Lock (**Cyan**, Q5 HE only) indicators replace Keychron's built-in ones.
+  - Caps Lock (on the Caps Lock key) and Num Lock (Q5 HE only), both **Peach**, indicators replace Keychron's built-in ones.
   - In auto-hide mode (default), status indicators (Caps Lock, Num Lock, Gaming) show for **2 s** and then fade into the key's regular color over **500 ms**. They come back on startup/wake, on any layer change (holding Space/Fn/Hardware key), and whenever an indicator turns on, off or changes color. While a layer key is held they stay visible; the 2 s window starts on release.
   - The fade blends into the regular color in Solid Color and OpenRGB/SignalRGB direct modes; in other effects the indicator just switches off.
   - Leader and Macro Recording indicators are never hidden while active.
   - `IND_MODE` (<kbd>Hardware</kbd> + <kbd>I</kbd>) toggles between auto-hide and always on.
 - **External RGB (SignalRGB & OpenRGB)**:
-  - `UG_SRGB` toggles external RGB synchronization.
-  - External RGB indicator (LED index 36 on Q5 HE):
-    - **White**: External RGB active and streaming.
-    - **Green**: External RGB idle / timed out.
-    - **Red**: External RGB disabled.
+  - External control is automatic: OpenRGB/SignalRGB take over the LEDs when they send data; SignalRGB falls back to the local effect after 500 ms of silence.
+  - External RGB indicator (Q5 HE, numpad <kbd>-</kbd>): lights **Lavender** while the Hardware layer is held and a host is driving the LEDs (direct mode).
   - When SignalRGB is active, QMK RGB adjustment keys intercept and forward standard SignalRGB shortcuts (`Ctrl+Alt+Shift+Gui` + `+`/`-`/`Q`/`A`/`Z`).
 
 ---
@@ -132,7 +130,7 @@ See full details in **[`keyboards/keychron/q5_he/ansi_encoder/keymaps/mine/READM
 
 ### Profile Switching Shortcuts
 1. **`TG_GMG` Key (F14 position next to Delete on `WIN_BASE`):**
-   - **Press 1**: Gaming Profile 1 (Rapid Trigger WASD, 1.0mm actuation, Red LED).
+   - **Press 1**: Gaming Profile 1 (Rapid Trigger WASD, 1.0mm actuation, Maroon LED).
    - **Press 2**: Gamepad Profile 2 (Xbox controller / analog axis bindings, Green LED).
    - **Press 3**: Turn off Gaming mode & restore Profile 0 (Default typing).
 2. **Keychron Hardware Combo (`Fn + P` held, then press):**
