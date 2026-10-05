@@ -388,18 +388,42 @@ static uint8_t openrgb_mode_to_qmk(uint8_t position) {
 }
 
 // Basic keycode of the key sitting on this LED (used by OpenRGB for key names)
+// Keycode OpenRGB has no name for: the LED gets an empty name. Never report 0
+// for a key: OpenRGB only adds a name for non-zero keycodes, so a 0 shifts
+// every later LED's name onto the wrong LED.
+#define LED_KEYCODE_UNNAMED 0xFF
+
+// The modifier key a mod-tap with no tap key (e.g. LALT_T(KC_NO)) stands for
+static uint16_t mod_tap_modifier(uint16_t keycode) {
+    uint8_t mods  = QK_MOD_TAP_GET_MODS(keycode);
+    bool    right = mods & 0x10; // bit 4 marks right-hand mods
+    for (uint8_t bit = 0; bit < 4; bit++) {
+        if (mods & (1 << bit)) return (right ? KC_RIGHT_CTRL : KC_LEFT_CTRL) + bit;
+    }
+    return KC_NO;
+}
+
+// Base keycode of the key under an LED on the active default layer (WIN_BASE
+// on Linux, MAC_BASE on a Mac), which OpenRGB turns into the LED's name
 static uint8_t get_led_keycode(uint8_t led_index) {
     if (led_index >= RGB_MATRIX_LED_COUNT) return 0;
+    uint8_t layer = get_highest_layer(default_layer_state);
     for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
         for (uint8_t col = 0; col < MATRIX_COLS; col++) {
             if (g_led_config.matrix_co[row][col] == led_index) {
-                uint16_t keycode = keymap_key_to_keycode(0, (keypos_t){col, row});
-                if (IS_QK_MOD_TAP(keycode)) keycode = QK_MOD_TAP_GET_TAP_KEYCODE(keycode);
-                else if (IS_QK_LAYER_TAP(keycode)) keycode = QK_LAYER_TAP_GET_TAP_KEYCODE(keycode);
-                else if (IS_QK_MODS(keycode)) keycode = QK_MODS_GET_BASIC_KEYCODE(keycode);
-                return IS_BASIC_KEYCODE(keycode) ? (uint8_t)keycode : 0;
+                uint16_t keycode = keymap_key_to_keycode(layer, (keypos_t){col, row});
+                if (IS_QK_MOD_TAP(keycode)) {
+                    uint16_t tap = QK_MOD_TAP_GET_TAP_KEYCODE(keycode);
+                    keycode      = (tap == KC_NO) ? mod_tap_modifier(keycode) : tap;
+                } else if (IS_QK_LAYER_TAP(keycode)) {
+                    keycode = QK_LAYER_TAP_GET_TAP_KEYCODE(keycode);
+                } else if (IS_QK_MODS(keycode)) {
+                    keycode = QK_MODS_GET_BASIC_KEYCODE(keycode);
+                }
+                return (IS_QK_BASIC(keycode) && keycode != KC_NO) ? (uint8_t)keycode : LED_KEYCODE_UNNAMED;
             }
         }
     }
+    // An LED without a key (underglow, indicators) keeps 0
     return 0;
 }
