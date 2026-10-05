@@ -30,7 +30,7 @@
 
 // Map indicator IDs to physical LED indices and colors
 // Format: [ID] = {.led_index = INDEX, .color = {R, G, B}}
-#define KEYBOARD_LED_MAP [INDICATOR_GAMING] = {.led_index = 14, .color = IND_COLOR_MAROON}, M_SIGNALRGB_INDICATOR(36)
+#define KEYBOARD_LED_MAP [INDICATOR_GAMING] = {.led_index = 14, .color = IND_COLOR_MAROON}, M_SIGNALRGB_INDICATOR(16)
 
 #define OPENRGB_DEVICE_NAME "Keychron Q5 HE"
 #define OPENRGB_DEVICE_VENDOR "Keychron"

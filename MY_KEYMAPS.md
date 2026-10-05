@@ -81,7 +81,7 @@ Record and replay keystroke macros on the fly without reflashing.
 - **Caps Lock Modifier-Tap**:
   - Mac Base: `GUI_T(KC_ESC)` — Escape on tap, Command (`GUI`) on hold. Permissive hold enabled.
   - Windows Base: `LCTL_T(KC_ESC)` — Escape on tap, `Control` on hold. Permissive hold enabled.
-  - Windows Base (Q5 HE top-left): `LCSG_T(KC_ESC)` — Escape on tap, `Ctrl+Shift+Gui` on hold.
+  - Windows Base (Q5 HE): plain `KC_ESC` top-left; `KC_HYPR` (`Ctrl+Shift+Alt+Gui`) on the key between the gaming toggle and the Hardware key.
 - **HJKL Arrow Navigation**:
   - On `MAC_FN` and `WIN_FN`, <kbd>H</kbd>, <kbd>J</kbd>, <kbd>K</kbd>, <kbd>L</kbd> are mapped to <kbd>Left</kbd>, <kbd>Down</kbd>, <kbd>Up</kbd>, <kbd>Right</kbd> (Vim-style navigation).
 - **Backspace & Delete**:
@@ -119,7 +119,7 @@ Record and replay keystroke macros on the fly without reflashing.
   - `IND_MODE` (<kbd>Hardware</kbd> + <kbd>I</kbd>) toggles between auto-hide and always on.
 - **External RGB (SignalRGB & OpenRGB)**:
   - External control is automatic: OpenRGB/SignalRGB take over the LEDs when they send data; SignalRGB falls back to the local effect after 500 ms of silence.
-  - External RGB indicator (Q5 HE, numpad <kbd>-</kbd>): lights **Lavender** while the Hardware layer is held and a host is driving the LEDs (direct mode).
+  - External RGB indicator (Q5 HE, on the Hardware key): lights **Lavender** while the Hardware layer is held and a host is driving the LEDs (direct mode).
   - When SignalRGB is active, QMK RGB adjustment keys intercept and forward standard SignalRGB shortcuts (`Ctrl+Alt+Shift+Gui` + `+`/`-`/`Q`/`A`/`Z`).
 
 ---
