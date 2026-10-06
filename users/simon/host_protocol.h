@@ -27,7 +27,7 @@
 //   0xC4 SET_INDICATOR_COLOR [1] wire id, [2] state, [3..5] r g b, [6] persist
 //   0xC5 SET_SETTING    [1] setting, [2] value, [3] persist
 //                       (1 indicator brightness, 2 indicators always on, 3 blackout,
-//                       4 layer dim: other keys while an FN layer / SUPER hint shows)
+//                       4 layer dim: other keys while an FN layer shows)
 //   0xC6 RESET_INDICATOR_COLORS [1] persist   (back to the firmware defaults)
 //   0xC7 RELOAD_INDICATOR_COLORS               (back to the saved colours and layer
 //                       dim: drops unsaved host overrides, e.g. an OpenRGB profile's)

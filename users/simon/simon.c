@@ -766,7 +766,7 @@ static void render_urgent_workspaces(uint8_t led_min, uint8_t led_max, uint8_t b
 
 // While SUPER is held on the Linux layer: number keys of workspaces with windows
 // (SUPER + ALT: 11-20), the active one in the workspace indicator's second
-// colour; every other key dims to layer_dim, as on FN layers and submaps
+// colour; the other keys keep their colour
 static void render_workspace_hint(uint8_t led_min, uint8_t led_max, uint8_t brightness) {
     static uint32_t gui_since;
     uint8_t         mods = get_mods();
@@ -782,12 +782,6 @@ static void render_workspace_hint(uint8_t led_min, uint8_t led_max, uint8_t brig
     refresh_number_key_leds();
     uint8_t shift = (mods & MOD_MASK_ALT) ? 10 : 0;
 
-    for (uint8_t i = led_min; i < led_max && i < RGB_MATRIX_LED_COUNT; i++) {
-        rgb_led_t base;
-        if (get_base_color(i, &base)) {
-            rgb_matrix_set_color(i, base.r * layer_dim / 255, base.g * layer_dim / 255, base.b * layer_dim / 255);
-        }
-    }
     for (uint8_t n = 0; n < 10; n++) {
         uint32_t bit = 1UL << (n + shift);
         if (active & bit) {

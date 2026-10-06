@@ -119,7 +119,7 @@ Record and replay keystroke macros on the fly without reflashing.
   - `IND_MODE` (<kbd>Hardware</kbd> + <kbd>I</kbd>) toggles between auto-hide and always on.
 - **Caps Word**: the Tab key lights peach while Caps Word is on (`caps-word` indicator, auto-hides like caps lock).
 - **Workspace hints (Linux layer, with `kbd-daemon`)**:
-  - Hold **SUPER** for 200 ms: number keys of Hyprland workspaces 1–10 with windows light (`workspace` indicator: occupied white, active peach); **SUPER + ALT** shows 11–20. Every other key dims to the layer dim (25% by default).
+  - Hold **SUPER** for 200 ms: number keys of Hyprland workspaces 1–10 with windows light (`workspace` indicator: occupied white, active peach); **SUPER + ALT** shows 11–20. The other keys keep their colour.
   - A workspace with a window demanding attention breathes its number key in the `urgent` colour (red), even while dimmed or with the lights off; a new one wakes a dimmed keyboard.
   - The data comes from `kbd-daemon` and is dropped when USB drops (KVM switch, replug) or the daemon stops.
 - **External RGB (SignalRGB & OpenRGB)**:
