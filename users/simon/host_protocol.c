@@ -3,6 +3,9 @@
 #include "raw_hid.h"
 #include "version.h"
 #include "usb_device_state.h"
+#ifdef LK_WIRELESS_ENABLE
+#    include "transport.h"
+#endif
 #ifdef ANANLOG_MATRIX
 #    include "profile.h"
 #endif
@@ -41,11 +44,22 @@ __attribute__((weak)) uint8_t host_base_layer_user(void) {
     return HOST_BASE_LAYER_UNKNOWN;
 }
 
+// The computer that sent the workspaces is the one on USB: while typing goes
+// elsewhere (wireless, cable pulled, host asleep) its workspaces are hidden.
+// Hidden, not dropped: with the cable still in, kbd-daemon keeps them current
+// for the switch back to USB.
+static bool host_link_up(void) {
+#ifdef LK_WIRELESS_ENABLE
+    if (get_transport() != TRANSPORT_USB) return false;
+#endif
+    return usb_device_state_get_configure_state() == USB_DEVICE_STATE_CONFIGURED;
+}
+
 bool host_workspaces_get(uint32_t *occupied, uint32_t *urgent, uint32_t *active) {
     *occupied = workspaces.occupied;
     *urgent   = workspaces.urgent;
     *active   = workspaces.active;
-    return workspaces.valid;
+    return workspaces.valid && host_link_up();
 }
 
 static uint32_t read_mask(const uint8_t *p) {
