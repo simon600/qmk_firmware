@@ -466,6 +466,10 @@ void lkbt51_send_raw_hid(uint8_t* data, uint8_t len) {
     uint8_t i = 0;
     memset(payload, 0, PACKET_MAX_LEN);
 
+    // The module's raw HID report is 32 bytes (see the rx path in wireless.c).
+    // RAW_EPSIZE 64 would overrun payload[] here and pkt[] in lkbt51_send_cmd.
+    if (len > 32) len = 32;
+
     payload[i++] = LKBT51_CMD_RAW_HID_TX;
     memcpy(payload + i, data, len);
     i += len;

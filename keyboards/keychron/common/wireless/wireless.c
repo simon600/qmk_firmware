@@ -28,6 +28,7 @@
 #include "keychron_raw_hid.h"
 #include "raw_hid.h"
 #include "eeprom.h"
+#include "usb_main.h"
 
 extern uint8_t         pairing_indication;
 extern host_driver_t   chibios_driver;
@@ -529,16 +530,20 @@ void wireless_send_xinput(report_xinput_t *report) {
 
 void wireless_send_raw_hid(uint8_t *data, uint8_t len) {
 #ifdef RAW_ENABLE
-    if (battery_is_critical_low()) return;
-    if (wireless_state == WT_PARING) return;
-
-    if (wireless_state == WT_CONNECTED) {
-        if (wireless_transport.send_raw_hid) {
-            wireless_transport.send_raw_hid(data, len);
-        }
-    } else if (wireless_state != WT_RESET) {
-        wireless_connect();
+#    if defined(KEEP_USB_CONNECTION_IN_WIRELESS_MODE)
+    /* Hosts talking raw HID over the still-attached USB (OpenRGB, SignalRGB,
+     * kbd-daemon) expect their replies there, and their traffic would swamp
+     * the wireless link that carries the keystrokes */
+    if (USB_DRIVER.state == USB_ACTIVE) {
+        chibios_driver.send_raw_hid(data, len);
+        return;
     }
+#    endif
+    /* Nothing else goes out over the air: replies to requests that came in
+     * wirelessly use kc_raw_hid_send(), and the unsolicited reports left here
+     * (layer and state notifications) have no reader on the dongle */
+    (void)data;
+    (void)len;
 #endif
 }
 
