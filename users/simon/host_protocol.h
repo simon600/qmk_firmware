@@ -36,6 +36,11 @@
 //                       number keys, 11-20 with SUPER + ALT). Valid until USB drops
 //                       to unconfigured (KVM switch, replug) or 0xC9 clears it
 //   0xC9 CLEAR_WORKSPACES
+//   0xCE NOTIFY_MODS    (keyboard -> host) [1] held modifiers as an X11 /
+//                       Hyprland modmask (1 shift, 4 ctrl, 8 alt, 64 super; left
+//                       and right alike). Sent once they've been held for 200 ms,
+//                       right away when they change while reported, 0 on release.
+//                       USB only
 //   0xCF NOTIFY_STATE   (keyboard -> host) [1..] state block, sent when state
 //                       changes on the keyboard itself (key press, Fn+P combo),
 //                       never for changes a host command made
@@ -54,7 +59,7 @@
 //   [5] background blackout
 //   [6] base layer (0 unknown, 1 Mac, 2 Linux/Windows)  [7] layer dim (0-255)
 
-#define HOST_PROTOCOL_VERSION 3
+#define HOST_PROTOCOL_VERSION 4
 
 enum host_command_id {
     HOST_GET_INFO               = 0xC0,
@@ -67,6 +72,7 @@ enum host_command_id {
     HOST_RELOAD_INDICATOR_COLORS = 0xC7,
     HOST_SET_WORKSPACES         = 0xC8,
     HOST_CLEAR_WORKSPACES       = 0xC9,
+    HOST_NOTIFY_MODS            = 0xCE,
     HOST_NOTIFY_STATE           = 0xCF,
 };
 
@@ -74,6 +80,7 @@ enum host_feature_bits {
     HOST_FEATURE_GAMING             = 1 << 0,
     HOST_FEATURE_HE_PROFILES        = 1 << 1,
     HOST_FEATURE_PERSISTENT_COLORS  = 1 << 2,
+    HOST_FEATURE_MODS_NOTIFY        = 1 << 3,
 };
 
 enum host_setting_id {
@@ -84,6 +91,14 @@ enum host_setting_id {
 };
 
 #define HOST_STATE_UNSUPPORTED 255
+
+// NOTIFY_MODS bits (X11 / Hyprland modmask)
+enum host_mod_bits {
+    HOST_MOD_SHIFT = 1 << 0,
+    HOST_MOD_CTRL  = 1 << 2,
+    HOST_MOD_ALT   = 1 << 3,
+    HOST_MOD_SUPER = 1 << 6,
+};
 
 enum host_base_layer {
     HOST_BASE_LAYER_UNKNOWN = 0,

@@ -14,6 +14,9 @@
 #define HOST_QUIET_MS 1000
 // Keyboard-side changes are coalesced into at most one notification per interval
 #define HOST_NOTIFY_INTERVAL_MS 100
+// Modifiers must be held this long before they're reported (quick combos stay
+// quiet), as the SUPER workspace hint
+#define HOST_MODS_DELAY_MS 200
 
 #define HOST_STATE_LEN 7
 
@@ -23,6 +26,11 @@ static uint32_t last_state_check;
 static uint8_t  baseline_state[HOST_STATE_LEN];
 static bool     baseline_valid;
 static bool     notify_pending;
+
+// Held modifiers (HOST_MOD_*): what is held now, since when, and what the host last got
+static uint8_t  mods_held;
+static uint32_t mods_since;
+static uint8_t  mods_reported;
 
 static struct {
     bool     valid;
@@ -126,6 +134,7 @@ static void reply_info(uint8_t *reply) {
 #if (EECONFIG_USER_DATA_SIZE) > 0
     features |= HOST_FEATURE_PERSISTENT_COLORS;
 #endif
+    features |= HOST_FEATURE_MODS_NOTIFY;
     reply[1] = HOST_PROTOCOL_VERSION;
     reply[2] = features;
     reply[3] = INDICATOR_COUNT;
@@ -256,11 +265,44 @@ void host_protocol_openrgb_command(uint8_t command) {
     }
 }
 
+static uint8_t read_mods(void) {
+    uint8_t mods = get_mods();
+    uint8_t out  = 0;
+    if (mods & MOD_MASK_SHIFT) out |= HOST_MOD_SHIFT;
+    if (mods & MOD_MASK_CTRL) out |= HOST_MOD_CTRL;
+    if (mods & MOD_MASK_ALT) out |= HOST_MOD_ALT;
+    if (mods & MOD_MASK_GUI) out |= HOST_MOD_SUPER;
+    return out;
+}
+
+// NOTIFY_MODS for the host's shortcut highlight: reported after
+// HOST_MODS_DELAY_MS, changes while reported and releases right away
+static void notify_mods(void) {
+    if (!host_link_up()) {
+        // The host that got the last report is gone; nothing to release
+        mods_held = mods_reported = 0;
+        return;
+    }
+    uint8_t now = read_mods();
+    if (now != mods_held) {
+        mods_held  = now;
+        mods_since = timer_read32();
+    }
+    uint8_t want = (mods_held && (mods_reported || timer_elapsed32(mods_since) >= HOST_MODS_DELAY_MS)) ? mods_held : 0;
+    if (want == mods_reported || in_quiet_window()) return;
+    uint8_t packet[RAW_EPSIZE] = {0};
+    packet[0]                  = HOST_NOTIFY_MODS;
+    packet[1]                  = want;
+    raw_hid_send(packet, RAW_EPSIZE);
+    mods_reported = want;
+}
+
 void host_protocol_task(void) {
     if (colors_reload_pending) {
         colors_reload_pending = false;
         indicator_colors_reload();
     }
+    notify_mods();
     if (timer_elapsed32(last_state_check) < HOST_NOTIFY_INTERVAL_MS) return;
     last_state_check = timer_read32();
 
