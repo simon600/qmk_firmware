@@ -31,9 +31,9 @@
 #    define M_SIGNALRGB_INDICATOR(idx)
 #endif
 
-// Map indicator IDs to physical LED indices
+// Map indicator IDs to physical LED indices (36 = Tab: Caps Word)
 // Format: [ID] = {.led_index = INDEX}
-#define KEYBOARD_LED_MAP [INDICATOR_GAMING] = {.led_index = 14}, M_SIGNALRGB_INDICATOR(16)
+#define KEYBOARD_LED_MAP [INDICATOR_GAMING] = {.led_index = 14}, [INDICATOR_CAPS_WORD] = {.led_index = 36}, M_SIGNALRGB_INDICATOR(16)
 
 // Default colour per state (host-editable, stored in the user datablock)
 #define KEYBOARD_INDICATOR_COLORS [INDICATOR_GAMING] = {[GAMING_IND_RAPID] = IND_COLOR_MAROON, [GAMING_IND_GAMEPAD] = IND_COLOR_GREEN},

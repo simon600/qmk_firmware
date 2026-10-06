@@ -240,6 +240,17 @@ bool host_gaming_set_user(uint8_t state) {
     gaming_set(state);
     return true;
 }
+
+uint8_t host_base_layer_user(void) {
+    switch (get_highest_layer(default_layer_state)) {
+        case MAC_BASE:
+            return HOST_BASE_LAYER_MAC;
+        case WIN_BASE:
+            return HOST_BASE_LAYER_LINUX;
+        default:
+            return HOST_BASE_LAYER_UNKNOWN;
+    }
+}
 #endif
 
 // --- QMK CALLBACK WRAPPERS ---

@@ -78,6 +78,9 @@ enum custom_keycodes_shared {
     X(INDICATOR_CAPS_LOCK, 5, 1) \
     X(INDICATOR_NUM_LOCK, 6, 1)  \
     X(INDICATOR_FN_LAYER, 7, 1)  \
+    X(INDICATOR_WORKSPACE, 8, 2) \
+    X(INDICATOR_URGENT, 9, 1)    \
+    X(INDICATOR_CAPS_WORD, 10, 1) \
     IF_EXT_RGB_ENABLED(X(INDICATOR_SIGNALRGB, 3, 1))
 
 // Allow keyboards to extend with their own indicators
@@ -148,6 +151,7 @@ typedef union {
 typedef struct {
     user_config_t config;
     rgb_led_t     indicator_colors[INDICATOR_COUNT][INDICATOR_MAX_STATES];
+    uint8_t       layer_dim;
 } user_data_t;
 #endif
 
@@ -209,4 +213,7 @@ uint8_t        indicator_state_count(uint8_t id);
 rgb_led_t      indicator_color_get(uint8_t id, uint8_t state);
 void           indicator_color_set(uint8_t id, uint8_t state, rgb_led_t color, bool persist);
 void           indicator_colors_reset(bool persist);
+void           indicator_colors_reload(void);
+uint8_t        layer_dim_get(void);
+void           layer_dim_set(uint8_t dim, bool persist);
 

@@ -2,6 +2,7 @@
 #include "simon.h"
 #include "raw_hid.h"
 #include "version.h"
+#include "usb_device_state.h"
 #ifdef ANANLOG_MATRIX
 #    include "profile.h"
 #endif
@@ -11,7 +12,7 @@
 // Keyboard-side changes are coalesced into at most one notification per interval
 #define HOST_NOTIFY_INTERVAL_MS 100
 
-#define HOST_STATE_LEN 5
+#define HOST_STATE_LEN 7
 
 static uint32_t quiet_since;
 static bool     quiet;
@@ -20,12 +21,46 @@ static uint8_t  baseline_state[HOST_STATE_LEN];
 static bool     baseline_valid;
 static bool     notify_pending;
 
+static struct {
+    bool     valid;
+    uint32_t occupied, urgent, active;
+} workspaces;
+
+// Set from the USB interrupt; the colours are reloaded (EEPROM, I2C) in the main loop
+static volatile bool colors_reload_pending;
+
 __attribute__((weak)) uint8_t host_gaming_state_user(void) {
     return HOST_STATE_UNSUPPORTED;
 }
 
 __attribute__((weak)) bool host_gaming_set_user(uint8_t state) {
     return false;
+}
+
+__attribute__((weak)) uint8_t host_base_layer_user(void) {
+    return HOST_BASE_LAYER_UNKNOWN;
+}
+
+bool host_workspaces_get(uint32_t *occupied, uint32_t *urgent, uint32_t *active) {
+    *occupied = workspaces.occupied;
+    *urgent   = workspaces.urgent;
+    *active   = workspaces.active;
+    return workspaces.valid;
+}
+
+static uint32_t read_mask(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)(p[2] & 0x0F) << 16);
+}
+
+// Workspace data and unsaved colour overrides (an OpenRGB profile's) belong to
+// the computer that sent them: drop both when USB drops to unconfigured (KVM
+// switch, replug). Suspend keeps them: same computer. kbd-daemon sends both
+// again when it sees the keyboard come back. Runs in the USB interrupt.
+void notify_usb_device_state_change_user(struct usb_device_state usb_device_state) {
+    if (usb_device_state.configure_state == USB_DEVICE_STATE_NO_INIT || usb_device_state.configure_state == USB_DEVICE_STATE_INIT) {
+        workspaces.valid      = false;
+        colors_reload_pending = true;
+    }
 }
 
 static bool in_quiet_window(void) {
@@ -51,6 +86,8 @@ static void read_state(uint8_t *out) {
     out[2] = cfg->indicator_brightness;
     out[3] = cfg->indicators_always_on;
     out[4] = cfg->bg_blackout_mode;
+    out[5] = host_base_layer_user();
+    out[6] = layer_dim_get();
 }
 
 // After a host command changed state, adopt it so it isn't echoed as a keyboard-side change
@@ -82,12 +119,14 @@ static void reply_info(uint8_t *reply) {
     strncpy((char *)&reply[5], QMK_BUILDDATE, RAW_EPSIZE - 6);
 }
 
-static void reply_indicators(uint8_t *reply) {
-    uint8_t pos = 2;
-    reply[1]    = INDICATOR_COUNT;
-    for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
+static void reply_indicators(uint8_t first, uint8_t *reply) {
+    uint8_t pos   = 4;
+    uint8_t count = 0;
+    reply[1]      = INDICATOR_COUNT;
+    reply[2]      = first;
+    for (uint8_t i = first; i < INDICATOR_COUNT; i++) {
         uint8_t states = indicator_state_count(i);
-        if (pos + 3 + states * 3 > RAW_EPSIZE) break;
+        if (pos + 3 + states * 3 > RAW_EPSIZE) break; // rest on the next page
         reply[pos++] = indicator_wire_id(i);
         reply[pos++] = states;
         reply[pos++] = get_indicators()[i].led_index;
@@ -97,7 +136,9 @@ static void reply_indicators(uint8_t *reply) {
             reply[pos++] = c.g;
             reply[pos++] = c.b;
         }
+        count++;
     }
+    reply[3] = count;
 }
 
 static void set_setting(uint8_t setting, uint8_t value, bool persist) {
@@ -109,6 +150,9 @@ static void set_setting(uint8_t setting, uint8_t value, bool persist) {
             break;
         case HOST_SETTING_INDICATORS_ALWAYS_ON:
             indicators_set_always_on(value != 0, persist);
+            break;
+        case HOST_SETTING_LAYER_DIM:
+            layer_dim_set(value, persist);
             break;
         case HOST_SETTING_BLACKOUT:
             cfg->bg_blackout_mode = value != 0;
@@ -141,7 +185,7 @@ bool host_protocol_rx(uint8_t *data, uint8_t length) {
             break;
 
         case HOST_GET_INDICATORS:
-            reply_indicators(reply);
+            reply_indicators(data[1], reply);
             host_send(reply);
             break;
 
@@ -165,6 +209,25 @@ bool host_protocol_rx(uint8_t *data, uint8_t length) {
             indicator_colors_reset(data[1] != 0);
             break;
 
+        case HOST_RELOAD_INDICATOR_COLORS:
+            indicator_colors_reload();
+            break;
+
+        case HOST_SET_WORKSPACES: {
+            uint32_t urgent = read_mask(&data[4]);
+            // A newly urgent workspace wakes a dimmed keyboard so it shows
+            if (urgent & ~workspaces.urgent) host_activity();
+            workspaces.occupied = read_mask(&data[1]);
+            workspaces.urgent   = urgent;
+            workspaces.active   = read_mask(&data[7]);
+            workspaces.valid    = true;
+            break;
+        }
+
+        case HOST_CLEAR_WORKSPACES:
+            workspaces.valid = false;
+            break;
+
         default:
             // Unknown command in our range: swallow it so nobody else answers
             break;
@@ -180,6 +243,10 @@ void host_protocol_openrgb_command(uint8_t command) {
 }
 
 void host_protocol_task(void) {
+    if (colors_reload_pending) {
+        colors_reload_pending = false;
+        indicator_colors_reload();
+    }
     if (timer_elapsed32(last_state_check) < HOST_NOTIFY_INTERVAL_MS) return;
     last_state_check = timer_read32();
 
