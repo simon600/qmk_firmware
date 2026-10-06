@@ -7,6 +7,9 @@
 #endif
 #include "keychron_common.h"
 #include "print.h"
+#ifdef LK_WIRELESS_ENABLE
+#    include "transport.h"
+#endif
 #ifdef KEYCHRON_RGB_ENABLE
 #    include "keychron_rgb_type.h"
 #endif
@@ -418,8 +421,34 @@ void keyboard_post_init_shared(void) {
 #endif
 }
 
+#ifdef LK_WIRELESS_ENABLE
+// Keychron re-inits the LED driver on every transport switch, which reloads the
+// RGB config from EEPROM and drops whatever was set without saving: OpenRGB's
+// direct mode, the brightness keys, the inactivity dim. Put the live config
+// back; the direct-mode frame buffer survives the re-init, so OpenRGB's colours
+// return without the host having to notice anything.
+static void restore_rgb_after_transport_change(void) {
+    static transport_t  last_transport = TRANSPORT_NONE;
+    static rgb_config_t live_config;
+    transport_t         transport = get_transport();
+
+    if (transport != last_transport && last_transport != TRANSPORT_NONE) {
+        rgb_matrix_config = live_config;
+        if (rgb_matrix_config.enable) {
+            rgb_matrix_mode_noeeprom(rgb_matrix_config.mode);
+        }
+    }
+    last_transport = transport;
+    live_config    = rgb_matrix_config;
+}
+#endif
+
 void matrix_scan_shared(void) {
     if (suspended) return;
+
+#ifdef LK_WIRELESS_ENABLE
+    restore_rgb_after_transport_change();
+#endif
 
     led_t host_leds                               = host_keyboard_led_state();
     indicator_library[INDICATOR_CAPS_LOCK].active = host_leds.caps_lock;
