@@ -41,8 +41,8 @@ static uint32_t indicators_shown_at;
 
 #define MIN_SAFE_BRIGHTNESS 50
 #define MIN_INDICATOR_BRIGHTNESS 16
-// Default brightness of the other keys while an FN layer or the SUPER
-// workspace hint is shown: 64/255 = 25%, as openrgb-daemon's `dim = 0.25`.
+// Default brightness of the other keys while an FN layer is shown: 64/255 =
+// 25%, as openrgb-daemon's `dim = 0.25`.
 // The live value (layer_dim) is a host setting; OpenRGB profiles override it.
 #define LAYER_DIM_DEFAULT 64
 #ifndef RGB_MATRIX_VAL_STEP
@@ -79,13 +79,9 @@ static const rgb_led_t indicator_default_colors[INDICATOR_COUNT][INDICATOR_MAX_S
     [INDICATOR_CAPS_LOCK] = {IND_COLOR_PEACH},
     [INDICATOR_NUM_LOCK]  = {IND_COLOR_PEACH},
     [INDICATOR_CAPS_WORD] = {IND_COLOR_PEACH},
-    // Colour-only entries (no LED of their own): the keys bound on a held FN
-    // layer, the number keys of workspaces (occupied, active) while SUPER is
-    // held, and the number key of an urgent workspace. OpenRGB profiles can
-    // override them while active ([keyboard_indicators]).
+    // Colour-only entry (no LED of its own): the keys bound on a held FN
+    // layer. OpenRGB profiles can override it while active ([keyboard_indicators]).
     [INDICATOR_FN_LAYER]  = {{255, 255, 255}},
-    [INDICATOR_WORKSPACE] = {{255, 255, 255}, IND_COLOR_PEACH},
-    [INDICATOR_URGENT]    = {IND_COLOR_RED},
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
     [INDICATOR_SIGNALRGB] = {IND_COLOR_LAVENDER},
 #endif
@@ -711,87 +707,6 @@ static uint8_t get_ext_rgb_max_brightness(void) {
 }
 #endif
 
-#ifdef HOST_PROTOCOL_ENABLE
-// --- WORKSPACE HINTS (data from kbd-daemon via the host protocol) ---
-
-// SUPER must be held this long before the number keys light (quick combos don't flash)
-#define SUPER_HINT_DELAY_MS 200
-// One breath of an urgent workspace's number key
-#define URGENT_PERIOD_MS 2000
-
-// LEDs of the number keys 1..9, 0 (workspace slots 0..9) on the default layer
-static uint8_t number_key_leds[10];
-static int8_t  number_key_layer = -1;
-
-static void refresh_number_key_leds(void) {
-    uint8_t layer = get_highest_layer(default_layer_state);
-    if (layer == number_key_layer) return;
-    number_key_layer = layer;
-    for (uint8_t n = 0; n < 10; n++) {
-        uint16_t wanted    = (n == 9) ? KC_0 : KC_1 + n;
-        number_key_leds[n] = NO_LED;
-        for (uint8_t row = 0; row < MATRIX_ROWS && number_key_leds[n] == NO_LED; row++) {
-            for (uint8_t col = 0; col < MATRIX_COLS; col++) {
-                if (g_led_config.matrix_co[row][col] != NO_LED && keymap_key_to_keycode(layer, (keypos_t){col, row}) == wanted) {
-                    number_key_leds[n] = g_led_config.matrix_co[row][col];
-                    break;
-                }
-            }
-        }
-    }
-}
-
-static void set_number_key(uint8_t n, rgb_led_t c, uint8_t level, uint8_t led_min, uint8_t led_max) {
-    uint8_t led = number_key_leds[n];
-    if (led == NO_LED || led < led_min || led >= led_max) return;
-    rgb_matrix_set_color(led, c.r * level / 255, c.g * level / 255, c.b * level / 255);
-}
-
-// Number keys of urgent workspaces breathe in the urgent colour (1-10 and 11-20
-// share keys). Drawn even while dimmed or with the lights off: it wants attention.
-static void render_urgent_workspaces(uint8_t led_min, uint8_t led_max, uint8_t brightness) {
-    uint32_t occupied, urgent, active;
-    if (!host_workspaces_get(&occupied, &urgent, &active) || !urgent) return;
-    refresh_number_key_leds();
-    uint16_t half  = URGENT_PERIOD_MS / 2;
-    uint16_t t     = timer_read32() % URGENT_PERIOD_MS;
-    uint16_t tri   = t < half ? t : URGENT_PERIOD_MS - t;
-    uint8_t  level = brightness * (51 + (uint32_t)tri * 204 / half) / 255; // 20%..100%
-    for (uint8_t n = 0; n < 10; n++) {
-        if (urgent & ((1UL << n) | (1UL << (n + 10)))) {
-            set_number_key(n, indicator_colors[INDICATOR_URGENT][0], level, led_min, led_max);
-        }
-    }
-}
-
-// While SUPER is held on the Linux layer: number keys of workspaces with windows
-// (SUPER + ALT: 11-20), the active one in the workspace indicator's second
-// colour; the other keys keep their colour
-static void render_workspace_hint(uint8_t led_min, uint8_t led_max, uint8_t brightness) {
-    static uint32_t gui_since;
-    uint8_t         mods = get_mods();
-    if (!(mods & MOD_MASK_GUI)) {
-        gui_since = 0;
-        return;
-    }
-    if (!gui_since) gui_since = timer_read32() | 1;
-    if (timer_elapsed32(gui_since) < SUPER_HINT_DELAY_MS) return;
-
-    uint32_t occupied, urgent, active;
-    if (host_base_layer_user() != HOST_BASE_LAYER_LINUX || !host_workspaces_get(&occupied, &urgent, &active)) return;
-    refresh_number_key_leds();
-    uint8_t shift = (mods & MOD_MASK_ALT) ? 10 : 0;
-
-    for (uint8_t n = 0; n < 10; n++) {
-        uint32_t bit = 1UL << (n + shift);
-        if (active & bit) {
-            set_number_key(n, indicator_colors[INDICATOR_WORKSPACE][1], brightness, led_min, led_max);
-        } else if (occupied & bit) {
-            set_number_key(n, indicator_colors[INDICATOR_WORKSPACE][0], brightness, led_min, led_max);
-        }
-    }
-}
-#endif
 
 bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
 #ifdef OPENRGB_ENABLE
@@ -804,9 +719,6 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
     }
 
     if (dimming_state.is_dimmed) {
-#ifdef HOST_PROTOCOL_ENABLE
-        render_urgent_workspaces(led_min, led_max, user_config.indicator_brightness);
-#endif
         return true;
     }
 
@@ -847,11 +759,6 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
         }
     }
 
-#ifdef HOST_PROTOCOL_ENABLE
-    // Under the indicators, so caps lock & co. stay visible while SUPER is held
-    render_workspace_hint(led_min, led_max, ind_brightness);
-#endif
-
     // Render active indicators (top layer)
     uint8_t visibility = indicator_visibility();
     for (uint8_t i = 0; i < INDICATOR_COUNT; i++) {
@@ -876,11 +783,6 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
             rgb_matrix_set_color(led, r, g, b);
         }
     }
-
-#ifdef HOST_PROTOCOL_ENABLE
-    // Last, so an urgent workspace shows over everything
-    render_urgent_workspaces(led_min, led_max, ind_brightness);
-#endif
 
     return true;
 }

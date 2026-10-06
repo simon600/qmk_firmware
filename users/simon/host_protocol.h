@@ -31,11 +31,8 @@
 //   0xC6 RESET_INDICATOR_COLORS [1] persist   (back to the firmware defaults)
 //   0xC7 RELOAD_INDICATOR_COLORS               (back to the saved colours and layer
 //                       dim: drops unsaved host overrides, e.g. an OpenRGB profile's)
-//   0xC8 SET_WORKSPACES [1..3] occupied, [4..6] urgent, [7..9] active: 20-bit
-//                       masks, little-endian, bit n = workspace n + 1 (1-10 on the
-//                       number keys, 11-20 with SUPER + ALT). Valid until USB drops
-//                       to unconfigured (KVM switch, replug) or 0xC9 clears it
-//   0xC9 CLEAR_WORKSPACES
+//   0xC8, 0xC9          retired (protocol 3-4 workspace hints; openrgb-daemon
+//                       draws them now from NOTIFY_MODS)
 //   0xCE NOTIFY_MODS    (keyboard -> host) [1] held modifiers as an X11 /
 //                       Hyprland modmask (1 shift, 4 ctrl, 8 alt, 64 super; left
 //                       and right alike). Sent once they've been held for 200 ms,
@@ -48,9 +45,7 @@
 // Indicator wire ids: 1 macro recording, 2 leader, 3 external RGB (Hardware
 // key), 4 gaming (states: rapid trigger, gamepad), 5 caps lock, 6 num lock,
 // 7 fn layer (colour of the keys bound on a held FN layer; no LED of its own),
-// 8 workspace (states: occupied, active; number keys while SUPER is held),
-// 9 urgent (number key of a workspace with a window demanding attention),
-// 10 caps word (Tab key)
+// 10 caps word (Tab key). 8 and 9 (workspace, urgent) are retired, not reused
 //
 // State block:
 //   [1] gaming state (0 off, 1 rapid, 2 gamepad, 255 unsupported)
@@ -59,7 +54,7 @@
 //   [5] background blackout
 //   [6] base layer (0 unknown, 1 Mac, 2 Linux/Windows)  [7] layer dim (0-255)
 
-#define HOST_PROTOCOL_VERSION 4
+#define HOST_PROTOCOL_VERSION 5
 
 enum host_command_id {
     HOST_GET_INFO               = 0xC0,
@@ -70,8 +65,6 @@ enum host_command_id {
     HOST_SET_SETTING            = 0xC5,
     HOST_RESET_INDICATOR_COLORS = 0xC6,
     HOST_RELOAD_INDICATOR_COLORS = 0xC7,
-    HOST_SET_WORKSPACES         = 0xC8,
-    HOST_CLEAR_WORKSPACES       = 0xC9,
     HOST_NOTIFY_MODS            = 0xCE,
     HOST_NOTIFY_STATE           = 0xCF,
 };
@@ -112,9 +105,6 @@ bool host_protocol_rx(uint8_t *data, uint8_t length);
 void host_protocol_openrgb_command(uint8_t command);
 // Call from the scan loop: sends pending state notifications
 void host_protocol_task(void);
-
-// Workspace masks from the host (bit n = workspace n + 1); false while none are valid
-bool host_workspaces_get(uint32_t *occupied, uint32_t *urgent, uint32_t *active);
 
 // Keymap hooks for gaming mode (weak defaults report "unsupported")
 uint8_t host_gaming_state_user(void);

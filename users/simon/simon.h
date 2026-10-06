@@ -78,8 +78,6 @@ enum custom_keycodes_shared {
     X(INDICATOR_CAPS_LOCK, 5, 1) \
     X(INDICATOR_NUM_LOCK, 6, 1)  \
     X(INDICATOR_FN_LAYER, 7, 1)  \
-    X(INDICATOR_WORKSPACE, 8, 2) \
-    X(INDICATOR_URGENT, 9, 1)    \
     X(INDICATOR_CAPS_WORD, 10, 1) \
     IF_EXT_RGB_ENABLED(X(INDICATOR_SIGNALRGB, 3, 1))
 
@@ -129,8 +127,9 @@ typedef struct {
 #endif
 
 // --- EEPROM USER CONFIG ---
-// Packed into eeconfig_read_user()/eeconfig_update_user() 32-bit slot
-#define USER_CONFIG_VERSION 2
+// Packed into eeconfig_read_user()/eeconfig_update_user() 32-bit slot.
+// Version 3: workspace / urgent indicators removed (the colour table shrank)
+#define USER_CONFIG_VERSION 3
 
 typedef union {
     uint32_t raw;

@@ -14,8 +14,7 @@
 #define HOST_QUIET_MS 1000
 // Keyboard-side changes are coalesced into at most one notification per interval
 #define HOST_NOTIFY_INTERVAL_MS 100
-// Modifiers must be held this long before they're reported (quick combos stay
-// quiet), as the SUPER workspace hint
+// Modifiers must be held this long before they're reported (quick combos stay quiet)
 #define HOST_MODS_DELAY_MS 200
 
 #define HOST_STATE_LEN 7
@@ -32,11 +31,6 @@ static uint8_t  mods_held;
 static uint32_t mods_since;
 static uint8_t  mods_reported;
 
-static struct {
-    bool     valid;
-    uint32_t occupied, urgent, active;
-} workspaces;
-
 // Set from the USB interrupt; the colours are reloaded (EEPROM, I2C) in the main loop
 static volatile bool colors_reload_pending;
 
@@ -52,10 +46,8 @@ __attribute__((weak)) uint8_t host_base_layer_user(void) {
     return HOST_BASE_LAYER_UNKNOWN;
 }
 
-// The computer that sent the workspaces is the one on USB: while typing goes
-// elsewhere (wireless, cable pulled, host asleep) its workspaces are hidden.
-// Hidden, not dropped: with the cable still in, kbd-daemon keeps them current
-// for the switch back to USB.
+// The host is the computer on USB: while typing goes elsewhere (wireless, cable
+// pulled, host asleep) there's nobody to notify
 static bool host_link_up(void) {
 #ifdef LK_WIRELESS_ENABLE
     if (get_transport() != TRANSPORT_USB) return false;
@@ -63,24 +55,12 @@ static bool host_link_up(void) {
     return usb_device_state_get_configure_state() == USB_DEVICE_STATE_CONFIGURED;
 }
 
-bool host_workspaces_get(uint32_t *occupied, uint32_t *urgent, uint32_t *active) {
-    *occupied = workspaces.occupied;
-    *urgent   = workspaces.urgent;
-    *active   = workspaces.active;
-    return workspaces.valid && host_link_up();
-}
-
-static uint32_t read_mask(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)(p[2] & 0x0F) << 16);
-}
-
-// Workspace data and unsaved colour overrides (an OpenRGB profile's) belong to
-// the computer that sent them: drop both when USB drops to unconfigured (KVM
-// switch, replug). Suspend keeps them: same computer. kbd-daemon sends both
-// again when it sees the keyboard come back. Runs in the USB interrupt.
+// Unsaved colour overrides (an OpenRGB profile's) belong to the computer that
+// sent them: drop them when USB drops to unconfigured (KVM switch, replug).
+// Suspend keeps them: same computer. kbd-daemon sends them again when it sees
+// the keyboard come back. Runs in the USB interrupt.
 void notify_usb_device_state_change_user(struct usb_device_state usb_device_state) {
     if (usb_device_state.configure_state == USB_DEVICE_STATE_NO_INIT || usb_device_state.configure_state == USB_DEVICE_STATE_INIT) {
-        workspaces.valid      = false;
         colors_reload_pending = true;
     }
 }
@@ -234,21 +214,6 @@ bool host_protocol_rx(uint8_t *data, uint8_t length) {
 
         case HOST_RELOAD_INDICATOR_COLORS:
             indicator_colors_reload();
-            break;
-
-        case HOST_SET_WORKSPACES: {
-            uint32_t urgent = read_mask(&data[4]);
-            // A newly urgent workspace wakes a dimmed keyboard so it shows
-            if (urgent & ~workspaces.urgent) host_activity();
-            workspaces.occupied = read_mask(&data[1]);
-            workspaces.urgent   = urgent;
-            workspaces.active   = read_mask(&data[7]);
-            workspaces.valid    = true;
-            break;
-        }
-
-        case HOST_CLEAR_WORKSPACES:
-            workspaces.valid = false;
             break;
 
         default:
