@@ -182,6 +182,10 @@ static struct {
     uint8_t  h, s, v, speed;
 } pending_hsv;
 
+// The effect OpenRGB last set without saving, see openrgb_owns_effect()
+static bool    host_effect_active;
+static uint8_t host_effect_mode;
+
 // Forward declarations of helper functions
 static uint8_t qmk_mode_to_openrgb(uint8_t qmk_mode);
 static uint8_t openrgb_mode_to_qmk(uint8_t position);
@@ -270,9 +274,13 @@ bool openrgb_raw_hid_rx(uint8_t *data, uint8_t length) {
             uint8_t save  = data[6];
 
             if (mode == OPENRGB_DIRECT_POSITION) {
+                host_effect_active = false;
                 openrgb_mode_enable();
             } else {
-                uint8_t qmk_mode = openrgb_mode_to_qmk(mode);
+                uint8_t qmk_mode   = openrgb_mode_to_qmk(mode);
+                // A saved effect is the keyboard's own from now on
+                host_effect_active = !save;
+                host_effect_mode   = qmk_mode;
                 if (save) {
                     rgb_matrix_sethsv(hue, sat, val);
                     rgb_matrix_set_speed(speed);
@@ -332,6 +340,15 @@ bool openrgb_raw_hid_rx(uint8_t *data, uint8_t length) {
     return true;
 }
 
+bool openrgb_owns_effect(void) {
+    // A local effect change (UG_NEXT without a host) ends it by itself
+    return host_effect_active && rgb_matrix_get_mode() == host_effect_mode;
+}
+
+void openrgb_release_effect(void) {
+    host_effect_active = false;
+}
+
 void openrgb_reassert_pending_hsv(void) {
     if (!pending_hsv.active) return;
     if (timer_expired32(timer_read32(), pending_hsv.until)) {
@@ -358,6 +375,7 @@ void openrgb_mode_enable(void) {
 }
 
 void openrgb_mode_disable(void) {
+    host_effect_active = false;
 #ifdef RGB_MATRIX_ENABLE
     rgb_matrix_reload_from_eeprom();
 #endif

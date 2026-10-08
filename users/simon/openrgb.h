@@ -68,6 +68,11 @@ enum OpenRGBModes {
 bool openrgb_raw_hid_rx(uint8_t *data, uint8_t length);
 void openrgb_mode_enable(void);
 void openrgb_mode_disable(void);
+// OpenRGB set the current effect (one of the firmware's, unsaved) and nothing
+// on the keyboard changed it since; direct mode is not included
+bool openrgb_owns_effect(void);
+// The keyboard picked an effect of its own
+void openrgb_release_effect(void);
 // Call from the rgb_matrix indicators hook (runs after each render) so a colour
 // set together with a mode change survives the fork's EEPROM reload.
 void openrgb_reassert_pending_hsv(void);

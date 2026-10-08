@@ -16,6 +16,8 @@
 #define HOST_NOTIFY_INTERVAL_MS 100
 // Modifiers must be held this long before they're reported (quick combos stay quiet)
 #define HOST_MODS_DELAY_MS 200
+// The host pings every 2 s; silence this long means nobody is listening
+#define HOST_LISTEN_TIMEOUT_MS 6000
 
 #define HOST_STATE_LEN 7
 
@@ -30,6 +32,10 @@ static bool     notify_pending;
 static uint8_t  mods_held;
 static uint32_t mods_since;
 static uint8_t  mods_reported;
+
+// Last command from the host, for host_listening()
+static uint32_t last_contact;
+static bool     contacted;
 
 // Set from the USB interrupt; the colours are reloaded (EEPROM, I2C) in the main loop
 static volatile bool colors_reload_pending;
@@ -114,7 +120,7 @@ static void reply_info(uint8_t *reply) {
 #if (EECONFIG_USER_DATA_SIZE) > 0
     features |= HOST_FEATURE_PERSISTENT_COLORS;
 #endif
-    features |= HOST_FEATURE_MODS_NOTIFY;
+    features |= HOST_FEATURE_MODS_NOTIFY | HOST_FEATURE_RGB_KEYS;
     reply[1] = HOST_PROTOCOL_VERSION;
     reply[2] = features;
     reply[3] = INDICATOR_COUNT;
@@ -167,6 +173,9 @@ static void set_setting(uint8_t setting, uint8_t value, bool persist) {
 bool host_protocol_rx(uint8_t *data, uint8_t length) {
     if (data[0] < 0xC0 || data[0] > 0xCF) return false;
 
+    last_contact = timer_read32();
+    contacted    = true;
+
     uint8_t reply[RAW_EPSIZE] = {0};
     reply[0]                  = data[0];
 
@@ -216,6 +225,10 @@ bool host_protocol_rx(uint8_t *data, uint8_t length) {
             indicator_colors_reload();
             break;
 
+        case HOST_PING:
+            // Contact is all it carries
+            break;
+
         default:
             // Unknown command in our range: swallow it so nobody else answers
             break;
@@ -262,7 +275,24 @@ static void notify_mods(void) {
     mods_reported = want;
 }
 
+bool host_listening(void) {
+    return contacted && timer_elapsed32(last_contact) < HOST_LISTEN_TIMEOUT_MS && host_link_up();
+}
+
+void host_notify_rgb_key(uint8_t key) {
+    uint8_t packet[RAW_EPSIZE] = {0};
+    packet[0]                  = HOST_NOTIFY_RGB_KEY;
+    packet[1]                  = key;
+    // Dropped in the quiet window: a press during OpenRGB's detection is lost
+    host_send(packet);
+}
+
 void host_protocol_task(void) {
+    // Also cleared here, so the 32-bit timer wrapping can't bring a long-gone
+    // host back
+    if (contacted && timer_elapsed32(last_contact) >= HOST_LISTEN_TIMEOUT_MS) {
+        contacted = false;
+    }
     if (colors_reload_pending) {
         colors_reload_pending = false;
         indicator_colors_reload();

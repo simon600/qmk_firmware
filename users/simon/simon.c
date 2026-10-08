@@ -110,6 +110,8 @@ static rgb_led_t indicator_current_color(uint8_t id) {
 
 // LED mask for FN layer rendering
 static bool mod_led_mask[RGB_MATRIX_LED_COUNT];
+// Keys of that mask that do nothing in direct mode (see inert_in_direct_mode)
+static bool direct_inert_mask[RGB_MATRIX_LED_COUNT];
 
 // --- STATE MANAGEMENT FUNCTIONS ---
 
@@ -134,6 +136,73 @@ static void register_activity(void) {
 
         dimming_state.is_dimmed = false;
     }
+}
+
+// Persist the live brightness alone. rgb_matrix_*_val() would flush the whole
+// config, mode included, and saving the direct mode a host is streaming in
+// would boot into a blank frame buffer.
+static void save_brightness(void) {
+    rgb_config_t stored;
+    eeconfig_read_rgb_matrix(&stored);
+    if (stored.hsv.v != rgb_matrix_config.hsv.v) {
+        stored.hsv.v = rgb_matrix_config.hsv.v;
+        eeconfig_update_rgb_matrix(&stored);
+    }
+}
+
+static bool in_direct_mode(void) {
+#if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
+    return rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB;
+#else
+    return false;
+#endif
+}
+
+// Same for the on/off state, toggled while a host streams
+static void save_rgb_enable(void) {
+    rgb_config_t stored;
+    eeconfig_read_rgb_matrix(&stored);
+    if (stored.enable != rgb_matrix_config.enable) {
+        stored.enable = rgb_matrix_config.enable;
+        eeconfig_update_rgb_matrix(&stored);
+    }
+}
+
+// While OpenRGB drives the keys (direct mode, or an effect it set) and a host
+// listens (kbd-daemon), the profile, brightness and on/off keys drive the host's
+// lighting (openrgb-daemon) instead. True when the key went to the host; without
+// one it stays local, so UG_NEXT always gets out of a mode whose host is gone.
+static bool rgb_key_to_host(uint16_t keycode, keyrecord_t *record) {
+#ifdef HOST_PROTOCOL_ENABLE
+    if (!(in_direct_mode() || openrgb_owns_effect()) || !host_listening()) return false;
+#    ifdef SIGNALRGB_ENABLE
+    if (signalrgb_is_streaming()) return false;
+#    endif
+    // Lighting switched off here only comes back on here
+    if (keycode == UG_TOGG && !rgb_matrix_is_enabled()) return false;
+    if (record->event.pressed) {
+        switch (keycode) {
+            case UG_NEXT:
+                host_notify_rgb_key(HOST_RGB_KEY_PROFILE_NEXT);
+                break;
+            case UG_PREV:
+                host_notify_rgb_key(HOST_RGB_KEY_PROFILE_PREV);
+                break;
+            case UG_VALU:
+                host_notify_rgb_key(HOST_RGB_KEY_BRIGHTNESS_UP);
+                break;
+            case UG_VALD:
+                host_notify_rgb_key(HOST_RGB_KEY_BRIGHTNESS_DOWN);
+                break;
+            case UG_TOGG:
+                host_notify_rgb_key(HOST_RGB_KEY_TOGGLE);
+                break;
+        }
+    }
+    return true;
+#else
+    return false;
+#endif
 }
 
 // A host command changed something visible (gaming mode, colours, settings):
@@ -218,12 +287,28 @@ static uint8_t blend(uint8_t from, uint8_t to, uint8_t amount) {
     return from + ((int16_t)to - from) * amount / 255;
 }
 
+// Hue, saturation and speed: the host sends finished colours in direct mode
+static bool inert_in_direct_mode(uint16_t keycode) {
+    switch (keycode) {
+        case UG_HUEU:
+        case UG_HUED:
+        case UG_SATU:
+        case UG_SATD:
+        case UG_SPDU:
+        case UG_SPDD:
+            return true;
+        default:
+            return false;
+    }
+}
+
 // Update the LED mask based on the active FN layer
 // This is called whenever the FN layer changes
 static void update_mod_led_mask(uint8_t fn_layer) {
     // Clear the mask
     for (uint8_t i = 0; i < RGB_MATRIX_LED_COUNT; i++) {
-        mod_led_mask[i] = false;
+        mod_led_mask[i]      = false;
+        direct_inert_mask[i] = false;
     }
 
     // If no FN layer is active, nothing to mask
@@ -238,7 +323,8 @@ static void update_mod_led_mask(uint8_t fn_layer) {
                 uint8_t  led_index = g_led_config.matrix_co[row][col];
                 uint16_t keycode   = keymap_key_to_keycode(active_fn_layer, (keypos_t){col, row});
                 if (led_index != NO_LED && keycode != KC_TRNS) {
-                    mod_led_mask[led_index] = true;
+                    mod_led_mask[led_index]      = true;
+                    direct_inert_mask[led_index] = inert_in_direct_mode(keycode);
                 }
             }
         }
@@ -527,7 +613,10 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             case UG_ANIM1:
             case UG_ANIM2:
             case UG_ANIM3:
-                rgb_adjusted_in_fn = true;
+                // A key that does nothing here leaves the layer dimmed
+                if (!(in_direct_mode() && inert_in_direct_mode(keycode))) {
+                    rgb_adjusted_in_fn = true;
+                }
                 break;
         }
     }
@@ -557,6 +646,9 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             }
 #endif
             if (record->event.pressed) {
+#ifdef OPENRGB_ENABLE
+                openrgb_release_effect();
+#endif
                 rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
                 rgb_matrix_sethsv(0, 0, 255);
             }
@@ -583,8 +675,10 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             return false;
 
         case UG_VALU:
-            // Always local, even while a host streams: the direct-mode renderer
-            // scales by val, so this dims the incoming frames too.
+            // Local unless kbd-daemon takes it (rgb_key_to_host); then the
+            // direct-mode renderer scales by val, so this dims the incoming
+            // frames too (SignalRGB, or OpenRGB without kbd-daemon).
+            if (rgb_key_to_host(keycode, record)) return false;
             if (record->event.pressed) {
                 if (user_config.bg_blackout_mode) {
                     user_config.bg_blackout_mode = false;
@@ -593,6 +687,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 } else {
                     rgb_matrix_increase_val_noeeprom();
                 }
+                save_brightness();
                 // Sync indicator brightness to keyboard brightness (with floor)
                 uint8_t new_val                  = rgb_matrix_get_val();
                 user_config.indicator_brightness = new_val < MIN_INDICATOR_BRIGHTNESS ? MIN_INDICATOR_BRIGHTNESS : new_val;
@@ -601,7 +696,8 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             return false;
 
         case UG_VALD:
-            // Always local, see UG_VALU
+            // See UG_VALU
+            if (rgb_key_to_host(keycode, record)) return false;
             if (record->event.pressed) {
                 uint8_t current_val = rgb_matrix_get_val();
                 if (current_val <= MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP) {
@@ -615,6 +711,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                     }
                     rgb_matrix_decrease_val_noeeprom();
                 }
+                save_brightness();
                 // Sync indicator brightness to keyboard brightness (with floor)
                 uint8_t new_val                  = rgb_matrix_get_val();
                 user_config.indicator_brightness = new_val < MIN_INDICATOR_BRIGHTNESS ? MIN_INDICATOR_BRIGHTNESS : new_val;
@@ -631,7 +728,8 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 return false;
             }
 #endif
-            // Let QMK handle it when SignalRGB is not streaming
+            if (rgb_key_to_host(keycode, record)) return false;
+            // Let QMK handle it when no host takes it
             return true;
 
         case UG_PREV:
@@ -643,13 +741,33 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
                 return false;
             }
 #endif
-            // Let QMK handle it when SignalRGB is not streaming
+            if (rgb_key_to_host(keycode, record)) return false;
+            // Let QMK handle it when no host takes it
             return true;
 
         case UG_TOGG:
             // RGB toggle should always use QMK handling, not SignalRGB
             // This prevents flickers when toggling RGB on/off
+            if (rgb_key_to_host(keycode, record)) return false;
+            if (in_direct_mode()) {
+                // QMK's toggle would save direct mode along with it
+                if (record->event.pressed) {
+                    rgb_matrix_toggle_noeeprom();
+                    save_rgb_enable();
+                }
+                return false;
+            }
             return true;
+
+        case UG_HUEU:
+        case UG_HUED:
+        case UG_SATU:
+        case UG_SATD:
+        case UG_SPDU:
+        case UG_SPDD:
+            // In direct mode these would change nothing visible and only save
+            // direct mode as the effect (inert_in_direct_mode)
+            return !in_direct_mode();
         case IND_BR_U:
             if (record->event.pressed) {
                 if (user_config.indicator_brightness < 255) {
@@ -737,9 +855,11 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
 
     // Show FN layer mask if FN layer is active (override layer)
     if (active_fn_layer != 0) {
+        // Per frame: the mode can change while the layer is held
+        bool direct = in_direct_mode();
         for (uint8_t i = led_min; i < led_max; i++) {
             if (i < RGB_MATRIX_LED_COUNT) {
-                if (mod_led_mask[i]) {
+                if (mod_led_mask[i] && !(direct && direct_inert_mask[i])) {
                     // Bound keys in the fn-layer indicator colour, at indicator brightness
                     rgb_led_t c = indicator_colors[INDICATOR_FN_LAYER][0];
                     rgb_matrix_set_color(i, c.r * ind_brightness / 255, c.g * ind_brightness / 255, c.b * ind_brightness / 255);

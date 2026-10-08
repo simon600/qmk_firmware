@@ -33,6 +33,13 @@
 //                       dim: drops unsaved host overrides, e.g. an OpenRGB profile's)
 //   0xC8, 0xC9          retired (protocol 3-4 workspace hints; openrgb-daemon
 //                       draws them now from NOTIFY_MODS)
+//   0xCC PING           heartbeat; any command counts. While the host was heard
+//                       from in the last 6 s (USB), the RGB keys in direct mode
+//                       go to it as NOTIFY_RGB_KEY instead of acting locally
+//   0xCD NOTIFY_RGB_KEY (keyboard -> host) [1] 1 next profile, 2 previous
+//                       profile, 3 brightness up, 4 brightness down, 5 lights
+//                       on/off. Sent instead
+//                       of acting on the key while a host streams direct mode
 //   0xCE NOTIFY_MODS    (keyboard -> host) [1] held modifiers as an X11 /
 //                       Hyprland modmask (1 shift, 4 ctrl, 8 alt, 64 super; left
 //                       and right alike). Sent once they've been held for 200 ms,
@@ -54,7 +61,7 @@
 //   [5] background blackout
 //   [6] base layer (0 unknown, 1 Mac, 2 Linux/Windows)  [7] layer dim (0-255)
 
-#define HOST_PROTOCOL_VERSION 5
+#define HOST_PROTOCOL_VERSION 6
 
 enum host_command_id {
     HOST_GET_INFO               = 0xC0,
@@ -65,6 +72,8 @@ enum host_command_id {
     HOST_SET_SETTING            = 0xC5,
     HOST_RESET_INDICATOR_COLORS = 0xC6,
     HOST_RELOAD_INDICATOR_COLORS = 0xC7,
+    HOST_PING                   = 0xCC,
+    HOST_NOTIFY_RGB_KEY         = 0xCD,
     HOST_NOTIFY_MODS            = 0xCE,
     HOST_NOTIFY_STATE           = 0xCF,
 };
@@ -74,6 +83,7 @@ enum host_feature_bits {
     HOST_FEATURE_HE_PROFILES        = 1 << 1,
     HOST_FEATURE_PERSISTENT_COLORS  = 1 << 2,
     HOST_FEATURE_MODS_NOTIFY        = 1 << 3,
+    HOST_FEATURE_RGB_KEYS           = 1 << 4,
 };
 
 enum host_setting_id {
@@ -93,6 +103,15 @@ enum host_mod_bits {
     HOST_MOD_SUPER = 1 << 6,
 };
 
+// NOTIFY_RGB_KEY actions
+enum host_rgb_key {
+    HOST_RGB_KEY_PROFILE_NEXT    = 1,
+    HOST_RGB_KEY_PROFILE_PREV    = 2,
+    HOST_RGB_KEY_BRIGHTNESS_UP   = 3,
+    HOST_RGB_KEY_BRIGHTNESS_DOWN = 4,
+    HOST_RGB_KEY_TOGGLE          = 5,
+};
+
 enum host_base_layer {
     HOST_BASE_LAYER_UNKNOWN = 0,
     HOST_BASE_LAYER_MAC     = 1,
@@ -105,6 +124,10 @@ bool host_protocol_rx(uint8_t *data, uint8_t length);
 void host_protocol_openrgb_command(uint8_t command);
 // Call from the scan loop: sends pending state notifications
 void host_protocol_task(void);
+// A host on USB pinged recently: it takes the RGB keys in direct mode
+bool host_listening(void);
+// Hands an RGB key (HOST_RGB_KEY_*) to the host
+void host_notify_rgb_key(uint8_t key);
 
 // Keymap hooks for gaming mode (weak defaults report "unsupported")
 uint8_t host_gaming_state_user(void);
