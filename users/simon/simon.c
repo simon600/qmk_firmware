@@ -110,8 +110,8 @@ static rgb_led_t indicator_current_color(uint8_t id) {
 
 // LED mask for FN layer rendering
 static bool mod_led_mask[RGB_MATRIX_LED_COUNT];
-// Keys of that mask that do nothing in direct mode (see inert_in_direct_mode)
-static bool direct_inert_mask[RGB_MATRIX_LED_COUNT];
+// Keys of that mask that do nothing under a host's lighting (see inert_under_host)
+static bool host_inert_mask[RGB_MATRIX_LED_COUNT];
 
 // --- STATE MANAGEMENT FUNCTIONS ---
 
@@ -158,6 +158,15 @@ static bool in_direct_mode(void) {
 #endif
 }
 
+// A host's lighting is on the keys: direct mode (OpenRGB or SignalRGB) or an
+// effect OpenRGB set. The keyboard's own lighting controls stay out of its way.
+static bool host_owns_lighting(void) {
+#ifdef OPENRGB_ENABLE
+    if (openrgb_owns_effect()) return true;
+#endif
+    return in_direct_mode();
+}
+
 // Same for the on/off state, toggled while a host streams
 static void save_rgb_enable(void) {
     rgb_config_t stored;
@@ -174,7 +183,7 @@ static void save_rgb_enable(void) {
 // one it stays local, so UG_NEXT always gets out of a mode whose host is gone.
 static bool rgb_key_to_host(uint16_t keycode, keyrecord_t *record) {
 #ifdef HOST_PROTOCOL_ENABLE
-    if (!(in_direct_mode() || openrgb_owns_effect()) || !host_listening()) return false;
+    if (!host_owns_lighting() || !host_listening()) return false;
 #    ifdef SIGNALRGB_ENABLE
     if (signalrgb_is_streaming()) return false;
 #    endif
@@ -204,6 +213,20 @@ static bool rgb_key_to_host(uint16_t keycode, keyrecord_t *record) {
     return false;
 #endif
 }
+
+#ifdef HOST_PROTOCOL_ENABLE
+// USB came back (wake, KVM switch) and no host spoke up: lighting OpenRGB left
+// behind goes back to the keyboard's own saved effect, so another computer
+// gets a keyboard it can control. SignalRGB streaming there keeps its own.
+bool host_handback_user(void) {
+#    ifdef SIGNALRGB_ENABLE
+    if (signalrgb_is_streaming()) return false;
+#    endif
+    if (!host_owns_lighting()) return false;
+    openrgb_mode_disable();
+    return true;
+}
+#endif
 
 // A host command changed something visible (gaming mode, colours, settings):
 // counts as activity, so a dimmed keyboard wakes up and draws its indicators
@@ -287,8 +310,9 @@ static uint8_t blend(uint8_t from, uint8_t to, uint8_t amount) {
     return from + ((int16_t)to - from) * amount / 255;
 }
 
-// Hue, saturation and speed: the host sends finished colours in direct mode
-static bool inert_in_direct_mode(uint16_t keycode) {
+// Hue, saturation and speed: under a host's lighting they'd only change, and
+// save to EEPROM, what the host set (in direct mode not even visibly)
+static bool inert_under_host(uint16_t keycode) {
     switch (keycode) {
         case UG_HUEU:
         case UG_HUED:
@@ -308,7 +332,7 @@ static void update_mod_led_mask(uint8_t fn_layer) {
     // Clear the mask
     for (uint8_t i = 0; i < RGB_MATRIX_LED_COUNT; i++) {
         mod_led_mask[i]      = false;
-        direct_inert_mask[i] = false;
+        host_inert_mask[i] = false;
     }
 
     // If no FN layer is active, nothing to mask
@@ -324,7 +348,7 @@ static void update_mod_led_mask(uint8_t fn_layer) {
                 uint16_t keycode   = keymap_key_to_keycode(active_fn_layer, (keypos_t){col, row});
                 if (led_index != NO_LED && keycode != KC_TRNS) {
                     mod_led_mask[led_index]      = true;
-                    direct_inert_mask[led_index] = inert_in_direct_mode(keycode);
+                    host_inert_mask[led_index] = inert_under_host(keycode);
                 }
             }
         }
@@ -614,7 +638,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             case UG_ANIM2:
             case UG_ANIM3:
                 // A key that does nothing here leaves the layer dimmed
-                if (!(in_direct_mode() && inert_in_direct_mode(keycode))) {
+                if (!(host_owns_lighting() && inert_under_host(keycode))) {
                     rgb_adjusted_in_fn = true;
                 }
                 break;
@@ -749,8 +773,8 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             // RGB toggle should always use QMK handling, not SignalRGB
             // This prevents flickers when toggling RGB on/off
             if (rgb_key_to_host(keycode, record)) return false;
-            if (in_direct_mode()) {
-                // QMK's toggle would save direct mode along with it
+            if (host_owns_lighting()) {
+                // QMK's toggle would save the host's mode along with it
                 if (record->event.pressed) {
                     rgb_matrix_toggle_noeeprom();
                     save_rgb_enable();
@@ -765,9 +789,8 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
         case UG_SATD:
         case UG_SPDU:
         case UG_SPDD:
-            // In direct mode these would change nothing visible and only save
-            // direct mode as the effect (inert_in_direct_mode)
-            return !in_direct_mode();
+            // See inert_under_host
+            return !host_owns_lighting();
         case IND_BR_U:
             if (record->event.pressed) {
                 if (user_config.indicator_brightness < 255) {
@@ -856,10 +879,10 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
     // Show FN layer mask if FN layer is active (override layer)
     if (active_fn_layer != 0) {
         // Per frame: the mode can change while the layer is held
-        bool direct = in_direct_mode();
+        bool host = host_owns_lighting();
         for (uint8_t i = led_min; i < led_max; i++) {
             if (i < RGB_MATRIX_LED_COUNT) {
-                if (mod_led_mask[i] && !(direct && direct_inert_mask[i])) {
+                if (mod_led_mask[i] && !(host && host_inert_mask[i])) {
                     // Bound keys in the fn-layer indicator colour, at indicator brightness
                     rgb_led_t c = indicator_colors[INDICATOR_FN_LAYER][0];
                     rgb_matrix_set_color(i, c.r * ind_brightness / 255, c.g * ind_brightness / 255, c.b * ind_brightness / 255);

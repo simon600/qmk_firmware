@@ -39,6 +39,12 @@
 //   0xCC PING           heartbeat; any command counts. While the host was heard
 //                       from in the last 6 s (USB), the RGB keys in direct mode
 //                       go to it as NOTIFY_RGB_KEY instead of acting locally
+//   0xCB NOTIFY_HANDBACK (keyboard -> host) no arguments. The keyboard shows its
+//                       own saved effect: it just started (a reboot the host
+//                       can't see, e.g. USB power cut in S3 and the device
+//                       kept across resume), or USB came back (wake, KVM switch)
+//                       and no host listened within 15 s. Sent once, when a host
+//                       next speaks, so it can set its lighting again
 //   0xCD NOTIFY_RGB_KEY (keyboard -> host) [1] 1 next profile, 2 previous
 //                       profile, 3 brightness up, 4 brightness down, 5 lights
 //                       on/off. Sent instead
@@ -75,6 +81,7 @@ enum host_command_id {
     HOST_SET_SETTING            = 0xC5,
     HOST_RESET_INDICATOR_COLORS = 0xC6,
     HOST_RELOAD_INDICATOR_COLORS = 0xC7,
+    HOST_NOTIFY_HANDBACK        = 0xCB,
     HOST_PING                   = 0xCC,
     HOST_NOTIFY_RGB_KEY         = 0xCD,
     HOST_NOTIFY_MODS            = 0xCE,
@@ -135,3 +142,7 @@ uint8_t host_gaming_state_user(void);
 bool    host_gaming_set_user(uint8_t state);
 // Keymap hook: which base layer is active (HOST_BASE_LAYER_*)
 uint8_t host_base_layer_user(void);
+// User hook: USB came back (wake, KVM switch) and no host listened within 15 s;
+// lighting a host left on the keys should go back to the keyboard's own.
+// Returns true if there was any (the next host gets NOTIFY_HANDBACK).
+bool host_handback_user(void);

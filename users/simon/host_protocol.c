@@ -16,6 +16,10 @@
 #define HOST_MODS_DELAY_MS 200
 // The host pings every 2 s; silence this long means nobody is listening
 #define HOST_LISTEN_TIMEOUT_MS 6000
+// After USB comes back, how long a host has to speak up before the keyboard
+// takes its lighting back. Waking this desktop (NVIDIA) takes a few seconds
+// before kbd-daemon runs again.
+#define HOST_HANDBACK_MS 15000
 
 #define HOST_STATE_LEN 7
 
@@ -35,6 +39,13 @@ static bool     contacted;
 
 // Set from the USB interrupt; the colours are reloaded (EEPROM, I2C) in the main loop
 static volatile bool colors_reload_pending;
+// USB went away (suspend, KVM switch, replug); set from the USB interrupt
+static volatile bool usb_dropped;
+static bool          handback_armed;
+static uint32_t      handback_since;
+// The keyboard shows its own lighting (just started, or took it back); the next
+// host to speak hears about it
+static bool handed_back = true;
 
 __attribute__((weak)) uint8_t host_gaming_state_user(void) {
     return HOST_STATE_UNSUPPORTED;
@@ -46,6 +57,10 @@ __attribute__((weak)) bool host_gaming_set_user(uint8_t state) {
 
 __attribute__((weak)) uint8_t host_base_layer_user(void) {
     return HOST_BASE_LAYER_UNKNOWN;
+}
+
+__attribute__((weak)) bool host_handback_user(void) {
+    return false;
 }
 
 // The host is the computer on USB: while typing goes elsewhere (wireless, cable
@@ -60,10 +75,15 @@ static bool host_link_up(void) {
 // Unsaved colour overrides (an OpenRGB profile's) belong to the computer that
 // sent them: drop them when USB drops to unconfigured (KVM switch, replug).
 // Suspend keeps them: same computer. kbd-daemon sends them again when it sees
-// the keyboard come back. Runs in the USB interrupt.
+// the keyboard come back. Lighting can't go by that: waking from S3 resets the
+// keyboard just like a KVM switch does, so it waits for a host instead
+// (host_handback_user). Runs in the USB interrupt.
 void notify_usb_device_state_change_user(struct usb_device_state usb_device_state) {
     if (usb_device_state.configure_state == USB_DEVICE_STATE_NO_INIT || usb_device_state.configure_state == USB_DEVICE_STATE_INIT) {
         colors_reload_pending = true;
+    }
+    if (usb_device_state.configure_state != USB_DEVICE_STATE_CONFIGURED) {
+        usb_dropped = true;
     }
 }
 
@@ -163,6 +183,12 @@ bool host_protocol_rx(uint8_t *data, uint8_t length) {
 
     last_contact = timer_read32();
     contacted    = true;
+    if (handed_back) {
+        handed_back                     = false;
+        uint8_t notice[RAW_EPSIZE] = {0};
+        notice[0]                       = HOST_NOTIFY_HANDBACK;
+        host_send(notice);
+    }
 
     uint8_t reply[RAW_EPSIZE] = {0};
     reply[0]                  = data[0];
@@ -276,6 +302,18 @@ void host_protocol_task(void) {
     if (colors_reload_pending) {
         colors_reload_pending = false;
         indicator_colors_reload();
+    }
+    // USB is back: a host that keeps pinging keeps its lighting
+    if (usb_dropped && usb_device_state_get_configure_state() == USB_DEVICE_STATE_CONFIGURED) {
+        usb_dropped    = false;
+        handback_armed = true;
+        handback_since = timer_read32();
+    }
+    if (handback_armed && timer_elapsed32(handback_since) >= HOST_HANDBACK_MS) {
+        handback_armed = false;
+        if (!host_listening() && host_handback_user()) {
+            handed_back = true;
+        }
     }
     notify_mods();
     if (timer_elapsed32(last_state_check) < HOST_NOTIFY_INTERVAL_MS) return;
