@@ -955,10 +955,6 @@ bool raw_hid_receive_shared(uint8_t src, uint8_t *data, uint8_t length) {
 
 #ifdef OPENRGB_ENABLE
     if (data[0] >= 0x01 && data[0] <= 0x09) {
-#    ifdef HOST_PROTOCOL_ENABLE
-        // A protocol-version query opens every OpenRGB detection: stay quiet meanwhile
-        host_protocol_openrgb_command(data[0]);
-#    endif
         ext_rgb_state.last_activity = timer_read32();
         ext_rgb_state.active_source = EXT_RGB_OPENRGB;
         ext_rgb_state.timed_out     = false;

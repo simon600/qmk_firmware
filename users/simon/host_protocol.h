@@ -11,9 +11,12 @@
 // Every reply starts with the command id it answers. Writes never reply, so
 // they can't land in another host program's read queue. Linux hands every
 // input report to every process that has the hidraw node open, and OpenRGB
-// takes the first report it reads as its answer without checking it; so for
-// ~1 s after OpenRGB's protocol-version query (which opens every detection)
-// replies are dropped and notifications held until the window ends.
+// takes the first report it reads as its answer without checking it; so the
+// keyboard says nothing unprompted until a host speaks to it: notifications
+// only go out while a host is listening (any command, e.g. PING, in the last
+// 6 s, over USB). A machine with only OpenRGB never sees a host-protocol
+// report. One that runs a host program must keep the OpenRGB server away from
+// the keyboard (kbd-daemon drives its lighting itself over 0x01–0x09).
 //
 // Packet layout (byte 0 = command id):
 //   0xC0 GET_INFO       -> [1] protocol version, [2] feature bits, [3] indicator count,
@@ -44,7 +47,7 @@
 //                       Hyprland modmask (1 shift, 4 ctrl, 8 alt, 64 super; left
 //                       and right alike). Sent once they've been held for 200 ms,
 //                       right away when they change while reported, 0 on release.
-//                       USB only
+//                       While a host listens (USB)
 //   0xCF NOTIFY_STATE   (keyboard -> host) [1..] state block, sent when state
 //                       changes on the keyboard itself (key press, Fn+P combo),
 //                       never for changes a host command made
@@ -61,7 +64,7 @@
 //   [5] background blackout
 //   [6] base layer (0 unknown, 1 Mac, 2 Linux/Windows)  [7] layer dim (0-255)
 
-#define HOST_PROTOCOL_VERSION 6
+#define HOST_PROTOCOL_VERSION 7
 
 enum host_command_id {
     HOST_GET_INFO               = 0xC0,
@@ -120,8 +123,6 @@ enum host_base_layer {
 
 // Returns true when the packet was a host protocol command
 bool host_protocol_rx(uint8_t *data, uint8_t length);
-// Call for every OpenRGB command; the protocol-version query starts the quiet window
-void host_protocol_openrgb_command(uint8_t command);
 // Call from the scan loop: sends pending state notifications
 void host_protocol_task(void);
 // A host on USB pinged recently: it takes the RGB keys in direct mode

@@ -10,8 +10,6 @@
 #    include "profile.h"
 #endif
 
-// Quiet window after OpenRGB's protocol-version query; its detection takes ~50 ms
-#define HOST_QUIET_MS 1000
 // Keyboard-side changes are coalesced into at most one notification per interval
 #define HOST_NOTIFY_INTERVAL_MS 100
 // Modifiers must be held this long before they're reported (quick combos stay quiet)
@@ -21,8 +19,6 @@
 
 #define HOST_STATE_LEN 7
 
-static uint32_t quiet_since;
-static bool     quiet;
 static uint32_t last_state_check;
 static uint8_t  baseline_state[HOST_STATE_LEN];
 static bool     baseline_valid;
@@ -71,15 +67,7 @@ void notify_usb_device_state_change_user(struct usb_device_state usb_device_stat
     }
 }
 
-static bool in_quiet_window(void) {
-    if (quiet && timer_elapsed32(quiet_since) >= HOST_QUIET_MS) {
-        quiet = false;
-    }
-    return quiet;
-}
-
 static void host_send(uint8_t *packet) {
-    if (in_quiet_window()) return;
     raw_hid_send(packet, RAW_EPSIZE);
 }
 
@@ -236,13 +224,6 @@ bool host_protocol_rx(uint8_t *data, uint8_t length) {
     return true;
 }
 
-void host_protocol_openrgb_command(uint8_t command) {
-    if (command == 0x01) {
-        quiet_since = timer_read32();
-        quiet       = true;
-    }
-}
-
 static uint8_t read_mods(void) {
     uint8_t mods = get_mods();
     uint8_t out  = 0;
@@ -256,8 +237,8 @@ static uint8_t read_mods(void) {
 // NOTIFY_MODS for the host's shortcut highlight: reported after
 // HOST_MODS_DELAY_MS, changes while reported and releases right away
 static void notify_mods(void) {
-    if (!host_link_up()) {
-        // The host that got the last report is gone; nothing to release
+    if (!host_listening()) {
+        // Nobody to tell, or the host that got the last report is gone
         mods_held = mods_reported = 0;
         return;
     }
@@ -267,11 +248,11 @@ static void notify_mods(void) {
         mods_since = timer_read32();
     }
     uint8_t want = (mods_held && (mods_reported || timer_elapsed32(mods_since) >= HOST_MODS_DELAY_MS)) ? mods_held : 0;
-    if (want == mods_reported || in_quiet_window()) return;
+    if (want == mods_reported) return;
     uint8_t packet[RAW_EPSIZE] = {0};
     packet[0]                  = HOST_NOTIFY_MODS;
     packet[1]                  = want;
-    raw_hid_send(packet, RAW_EPSIZE);
+    host_send(packet);
     mods_reported = want;
 }
 
@@ -283,7 +264,6 @@ void host_notify_rgb_key(uint8_t key) {
     uint8_t packet[RAW_EPSIZE] = {0};
     packet[0]                  = HOST_NOTIFY_RGB_KEY;
     packet[1]                  = key;
-    // Dropped in the quiet window: a press during OpenRGB's detection is lost
     host_send(packet);
 }
 
@@ -312,11 +292,13 @@ void host_protocol_task(void) {
         memcpy(baseline_state, current, HOST_STATE_LEN);
         notify_pending = true;
     }
-    if (notify_pending && !in_quiet_window()) {
+    // Without a listening host the change is simply adopted: a host reads the
+    // whole state when it connects
+    if (notify_pending && host_listening()) {
         uint8_t packet[RAW_EPSIZE] = {0};
         packet[0]                  = HOST_NOTIFY_STATE;
         memcpy(&packet[1], baseline_state, HOST_STATE_LEN);
-        raw_hid_send(packet, RAW_EPSIZE);
-        notify_pending = false;
+        host_send(packet);
     }
+    notify_pending = false;
 }
