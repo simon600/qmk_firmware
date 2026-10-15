@@ -663,6 +663,18 @@ ifeq ($(strip $(RAW_ENABLE)), yes)
     SRC += raw_hid.c
 endif
 
+# A second raw HID interface for a host program (64-byte reports, its own
+# usage page), next to the VIA one. ChibiOS only.
+ifeq ($(strip $(RGB_RAW_ENABLE)), yes)
+    ifneq ($(strip $(PLATFORM_KEY)), chibios)
+        $(error RGB_RAW_ENABLE is only supported on ChibiOS)
+    endif
+    ifneq ($(strip $(RAW_ENABLE)), yes)
+        $(error RGB_RAW_ENABLE requires RAW_ENABLE)
+    endif
+    OPT_DEFS += -DRGB_RAW_ENABLE
+endif
+
 ifeq ($(strip $(DYNAMIC_KEYMAP_ENABLE)), yes)
     SEND_STRING_ENABLE := yes
 endif

@@ -55,6 +55,11 @@ int main(void) {
         raw_hid_task();
 #endif
 
+#ifdef RGB_RAW_ENABLE
+        void rgb_raw_hid_task(void);
+        rgb_raw_hid_task();
+#endif
+
 #ifdef CONSOLE_ENABLE
         void console_task(void);
         console_task();

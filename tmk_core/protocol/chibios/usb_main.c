@@ -601,6 +601,24 @@ void raw_hid_task(void) {
 
 #endif
 
+#ifdef RGB_RAW_ENABLE
+void rgb_raw_hid_send(uint8_t *data, uint8_t length) {
+    if (length != RGB_RAW_EPSIZE) {
+        return;
+    }
+    send_report(USB_ENDPOINT_IN_RGB_RAW, data, length);
+}
+
+__attribute__((weak)) void rgb_raw_hid_receive(uint8_t *data, uint8_t length) {}
+
+void rgb_raw_hid_task(void) {
+    uint8_t buffer[RGB_RAW_EPSIZE];
+    while (receive_report(USB_ENDPOINT_OUT_RGB_RAW, buffer, sizeof(buffer))) {
+        rgb_raw_hid_receive(buffer, sizeof(buffer));
+    }
+}
+#endif
+
 #ifdef MIDI_ENABLE
 
 void send_midi_packet(MIDI_EventPacket_t *event) {

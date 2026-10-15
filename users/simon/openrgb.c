@@ -1,6 +1,6 @@
 #include "openrgb.h"
 #include "quantum.h"
-#include "raw_hid.h"
+#include "host_raw.h"
 #include "version.h"
 #include "print.h"
 
@@ -193,7 +193,7 @@ static uint8_t get_led_keycode(uint8_t led_index);
 static void    send_response(uint8_t *response);
 
 bool openrgb_raw_hid_rx(uint8_t *data, uint8_t length) {
-    uint8_t response[RAW_EPSIZE] = {0};
+    uint8_t response[HOST_PACKET_LEN] = {0};
     response[0]                  = data[0];
 
     switch (data[0]) {
@@ -203,7 +203,7 @@ bool openrgb_raw_hid_rx(uint8_t *data, uint8_t length) {
             break;
 
         case QMK_OPENRGB_GET_QMK_VERSION:
-            strncpy((char *)&response[1], QMK_VERSION, RAW_EPSIZE - 3);
+            strncpy((char *)&response[1], QMK_VERSION, HOST_PACKET_LEN - 3);
             send_response(response);
             break;
 
@@ -211,10 +211,10 @@ bool openrgb_raw_hid_rx(uint8_t *data, uint8_t length) {
             response[1]    = RGB_MATRIX_LED_COUNT;
             response[2]    = RGB_MATRIX_LED_COUNT;
             uint8_t offset = 3;
-            strncpy((char *)&response[offset], OPENRGB_DEVICE_NAME, (RAW_EPSIZE - 2) / 2 - offset);
+            strncpy((char *)&response[offset], OPENRGB_DEVICE_NAME, (HOST_PACKET_LEN - 2) / 2 - offset);
             offset += strlen((char *)&response[offset]) + 1;
-            if (offset < RAW_EPSIZE - 3) {
-                strncpy((char *)&response[offset], OPENRGB_DEVICE_VENDOR, RAW_EPSIZE - 2 - offset);
+            if (offset < HOST_PACKET_LEN - 3) {
+                strncpy((char *)&response[offset], OPENRGB_DEVICE_VENDOR, HOST_PACKET_LEN - 2 - offset);
             }
             send_response(response);
             break;
@@ -364,8 +364,8 @@ void openrgb_reassert_pending_hsv(void) {
 }
 
 static void send_response(uint8_t *response) {
-    response[RAW_EPSIZE - 1] = QMK_OPENRGB_END_OF_MESSAGE;
-    raw_hid_send(response, RAW_EPSIZE);
+    response[HOST_PACKET_LEN - 1] = QMK_OPENRGB_END_OF_MESSAGE;
+    host_packet_send(response);
 }
 
 void openrgb_mode_enable(void) {

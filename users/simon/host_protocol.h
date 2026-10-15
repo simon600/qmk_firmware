@@ -8,6 +8,13 @@
 // gaming mode, settings and indicator colours. It shares the raw HID interface
 // with OpenRGB (0x01–0x09), SignalRGB (0x21–0x28) and Keychron (0xA0–0xAB).
 //
+// With RGB_RAW_ENABLE (protocol 8, HOST_FEATURE_OWN_INTERFACE) it and the
+// OpenRGB packets move to a second raw HID interface of their own: 64-byte
+// reports, usage page 0xFF61 / usage 0x61, USB only. The first interface
+// (usage page 0xFF60, 32 bytes) keeps VIA, Keychron and SignalRGB and no
+// longer answers 0x01–0x09 or 0xC0–0xCF. What follows about other programs
+// reading the same reports applies to the shared interface only.
+//
 // Every reply starts with the command id it answers. Writes never reply, so
 // they can't land in another host program's read queue. Linux hands every
 // input report to every process that has the hidraw node open, and OpenRGB
@@ -19,7 +26,7 @@
 // the keyboard (kbd-daemon drives its lighting itself over 0x01–0x09).
 //
 // Packet layout (byte 0 = command id):
-//   0xC0 GET_INFO       -> [1] protocol version, [2] feature bits, [3] indicator count,
+//   0xC0 GET_INFO       -> [1] protocol version, [2] feature bits (HOST_FEATURE_*), [3] indicator count,
 //                          [4] max states per indicator, [5..] build date (NUL-terminated)
 //   0xC1 GET_STATE      -> [1..] state block (see below)
 //   0xC2 SET_GAMING     [1] 0 off, 1 rapid trigger, 2 gamepad
@@ -70,7 +77,7 @@
 //   [5] background blackout
 //   [6] base layer (0 unknown, 1 Mac, 2 Linux/Windows)  [7] layer dim (0-255)
 
-#define HOST_PROTOCOL_VERSION 7
+#define HOST_PROTOCOL_VERSION 8
 
 enum host_command_id {
     HOST_GET_INFO               = 0xC0,
@@ -94,6 +101,8 @@ enum host_feature_bits {
     HOST_FEATURE_PERSISTENT_COLORS  = 1 << 2,
     HOST_FEATURE_MODS_NOTIFY        = 1 << 3,
     HOST_FEATURE_RGB_KEYS           = 1 << 4,
+    // Host protocol and OpenRGB packets on their own raw HID interface
+    HOST_FEATURE_OWN_INTERFACE      = 1 << 5,
 };
 
 enum host_setting_id {

@@ -33,6 +33,16 @@
 #    define RAW_USAGE_ID 0x61
 #endif
 
+// The second raw HID interface (RGB_RAW_ENABLE) gets its own usage page, so
+// programs that look for QMK's raw HID (VIA, OpenRGB, SignalRGB) never pick it
+#ifndef RGB_RAW_USAGE_PAGE
+#    define RGB_RAW_USAGE_PAGE 0xFF61
+#endif
+
+#ifndef RGB_RAW_USAGE_ID
+#    define RGB_RAW_USAGE_ID 0x61
+#endif
+
 /////////////////////
 // Hires Scroll Defaults
 

@@ -44,6 +44,9 @@
 #pragma once
 
 #include <LUFA/Drivers/USB/USB.h>
+#ifdef RGB_RAW_ENABLE
+#    include "raw_hid.h" // RGB_RAW_EPSIZE
+#endif
 
 #ifdef PROTOCOL_CHIBIOS
 #    include <hal.h>
@@ -80,6 +83,14 @@ typedef struct {
     USB_HID_Descriptor_HID_t   Raw_HID;
     USB_Descriptor_Endpoint_t  Raw_INEndpoint;
     USB_Descriptor_Endpoint_t  Raw_OUTEndpoint;
+#endif
+
+#ifdef RGB_RAW_ENABLE
+    // Second raw HID Interface (host program)
+    USB_Descriptor_Interface_t RgbRaw_Interface;
+    USB_HID_Descriptor_HID_t   RgbRaw_HID;
+    USB_Descriptor_Endpoint_t  RgbRaw_INEndpoint;
+    USB_Descriptor_Endpoint_t  RgbRaw_OUTEndpoint;
 #endif
 
 #if defined(MOUSE_ENABLE) && !defined(MOUSE_SHARED_EP)
@@ -176,6 +187,11 @@ enum usb_interfaces {
     RAW_INTERFACE,
 #endif
 
+// Right after it, so the raw interface keeps its number
+#ifdef RGB_RAW_ENABLE
+    RGB_RAW_INTERFACE,
+#endif
+
 #if defined(MOUSE_ENABLE) && !defined(MOUSE_SHARED_EP)
     MOUSE_INTERFACE,
 #endif
@@ -250,6 +266,15 @@ enum usb_endpoints {
 #        define RAW_OUT_EPNUM RAW_IN_EPNUM
 #    else
     RAW_OUT_EPNUM         = NEXT_EPNUM,
+#    endif
+#endif
+
+#ifdef RGB_RAW_ENABLE
+    RGB_RAW_IN_EPNUM = NEXT_EPNUM,
+#    ifdef USB_ENDPOINTS_ARE_REORDERABLE
+#        define RGB_RAW_OUT_EPNUM RGB_RAW_IN_EPNUM
+#    else
+    RGB_RAW_OUT_EPNUM     = NEXT_EPNUM,
 #    endif
 #endif
 

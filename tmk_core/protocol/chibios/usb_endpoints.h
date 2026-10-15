@@ -43,6 +43,14 @@
 #    define RAW_OUT_CAPACITY USB_DEFAULT_BUFFER_CAPACITY
 #endif
 
+#if !defined(RGB_RAW_IN_CAPACITY)
+#    define RGB_RAW_IN_CAPACITY USB_DEFAULT_BUFFER_CAPACITY
+#endif
+
+#if !defined(RGB_RAW_OUT_CAPACITY)
+#    define RGB_RAW_OUT_CAPACITY USB_DEFAULT_BUFFER_CAPACITY
+#endif
+
 #if !defined(MIDI_STREAM_IN_CAPACITY)
 #    define MIDI_STREAM_IN_CAPACITY USB_DEFAULT_BUFFER_CAPACITY
 #endif
@@ -94,6 +102,10 @@ typedef enum {
     USB_ENDPOINT_IN_RAW,
 #endif
 
+#if defined(RGB_RAW_ENABLE)
+    USB_ENDPOINT_IN_RGB_RAW,
+#endif
+
 #if defined(MIDI_ENABLE)
     USB_ENDPOINT_IN_MIDI,
 #endif
@@ -134,6 +146,9 @@ extern usb_endpoint_in_lut_t usb_endpoint_interface_lut[TOTAL_INTERFACES];
 typedef enum {
 #if defined(RAW_ENABLE)
     USB_ENDPOINT_OUT_RAW,
+#endif
+#if defined(RGB_RAW_ENABLE)
+    USB_ENDPOINT_OUT_RGB_RAW,
 #endif
 #if defined(MIDI_ENABLE)
     USB_ENDPOINT_OUT_MIDI,

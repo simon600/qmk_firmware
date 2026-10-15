@@ -1,7 +1,8 @@
 #pragma once
 
-// Set RAW HID endpoint size to 64 bytes for OpenRGB
-#define RAW_EPSIZE 64
+// VIA's raw HID reports are 32 bytes (SignalRGB's too); kbd-daemon's 64-byte
+// packets have their own interface (RGB_RAW_ENABLE)
+#define RAW_EPSIZE 32
 
 // Enable combo_should_trigger to conditionally disable combos on gaming layers
 #define COMBO_SHOULD_TRIGGER

@@ -963,12 +963,13 @@ void leader_end_shared(void) {
 extern bool srgb_raw_hid_rx(uint8_t *data, uint8_t length);
 #endif
 
-bool raw_hid_receive_shared(uint8_t src, uint8_t *data, uint8_t length) {
+// kbd-daemon's packets: host protocol and OpenRGB
+static bool host_packet_rx(uint8_t *data, uint8_t length) {
     // --- OpenRGB commands (0x01–0x09) ---
     // Never gated by the ext-RGB toggle: OpenRGB's detector busy-loops until it
     // gets a reply, so a dropped query hangs its whole HID detection thread.
     // SET_MODE decides whether the matrix is in direct or a native effect; the
-    // toggle key below only governs SignalRGB.
+    // ext-RGB toggle key only governs SignalRGB.
 #ifdef HOST_PROTOCOL_ENABLE
     // --- Host protocol (0xC0–0xCF) ---
     if (host_protocol_rx(data, length)) {
@@ -986,6 +987,27 @@ bool raw_hid_receive_shared(uint8_t src, uint8_t *data, uint8_t length) {
             register_activity();
             return true;
         }
+        return false;
+    }
+#endif
+
+    return false;
+}
+
+#ifdef RGB_RAW_ENABLE
+// Their own interface. Unknown commands get no reply.
+void rgb_raw_hid_receive(uint8_t *data, uint8_t length) {
+    host_packet_rx(data, length);
+}
+#endif
+
+bool raw_hid_receive_shared(uint8_t src, uint8_t *data, uint8_t length) {
+#ifndef RGB_RAW_ENABLE
+    if (host_packet_rx(data, length)) {
+        return true;
+    }
+    // OpenRGB's ids that it didn't take aren't anyone else's either
+    if (data[0] >= 0x01 && data[0] <= 0x09) {
         return false;
     }
 #endif
