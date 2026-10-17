@@ -196,13 +196,28 @@ bool overlay_loaded(void) {
     return loaded;
 }
 
-void overlay_release(void) {
+bool overlay_shown(void) {
+    return loaded && rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB;
+}
+
+void overlay_reassert(void) {
+    if (loaded && rgb_matrix_get_mode() != RGB_MATRIX_CUSTOM_SIGNALRGB) {
+        openrgb_mode_enable();
+    }
+}
+
+void overlay_forget(void) {
     if (!loaded) return;
     loaded       = false;
     slot_count   = 0;
     mods_slot    = -1;
     submap_fader = mods_fader = (fader_t){0};
     ws_active = ws_occupied = ws_urgent = 0;
+}
+
+void overlay_release(void) {
+    if (!loaded) return;
+    overlay_forget();
     if (rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB) {
         openrgb_mode_disable();
     }

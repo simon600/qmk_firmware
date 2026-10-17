@@ -15,9 +15,10 @@
 // Highlights light their keys and dim the rest, fading in and out.
 //
 // It lives in RAM: sleep keeps it, a power cycle doesn't (the heartbeat's [2]
-// says whether it's loaded, so the host can send it again). Leaving 2.4 GHz,
-// or the link coming back with no host speaking up within 15 s, gives the keys
-// back to the keyboard's own saved effect.
+// says whether it's loaded, so the host can send it again). Going to
+// Bluetooth, or the link coming back with no host speaking up within 15 s,
+// gives the keys back to the keyboard's own saved effect; going to USB only
+// drops it (USB's own handback applies there).
 //
 // 0xCA LIGHTING [1] op, no replies:
 //   1 RELEASE     the keyboard's own effect again; everything is dropped
@@ -53,8 +54,17 @@ enum overlay_op {
 void overlay_rx(uint8_t *data, uint8_t length);
 // The host's lighting is loaded (it may be off the keys: a local effect change)
 bool overlay_loaded(void);
+// ...and on the keys (direct mode)
+bool overlay_shown(void);
+// Back on the keys after something else switched the effect (Keychron
+// re-inits the LED driver on transport changes, reloading the saved effect);
+// the direct-mode buffer survives that
+void overlay_reassert(void);
 // Back to the keyboard's own effect
 void overlay_release(void);
+// Drops the host's lighting but leaves the effect: on USB that host's direct
+// mode takes over (or the USB handback gives the keys back)
+void overlay_forget(void);
 // Base plus overlays for one LED, as the direct-mode effect shows the base
 // (unscaled); call overlay_frame() first in each render pass
 void overlay_frame(void);

@@ -36,7 +36,8 @@
 //   - 6 s after a heartbeat without an answer it takes the host to be gone,
 //     and stays quiet until one speaks again
 //   - the heartbeat's [2] is 1 while the host's lighting (0xCA, protocol 10)
-//     is loaded: 0 after a power cycle or a handback, so the host sends it again
+//     is on the keys: 0 after a power cycle, a handback or a local effect
+//     change, so the host sends it again
 // NOTIFY_STATE goes to such a host too, and NOTIFY_RGB_KEY while its lighting
 // is loaded. NOTIFY_MODS and NOTIFY_HANDBACK stay on USB: the keyboard draws
 // the modifier highlight itself (overlay.h).
@@ -107,6 +108,9 @@
 //   [3] indicator brightness  [4] indicators always on (0 = auto-hide)
 //   [5] background blackout
 //   [6] base layer (0 unknown, 1 Mac, 2 Linux/Windows)  [7] layer dim (0-255)
+//   GET_STATE only (protocol 10): [8] what typing goes over (HOST_TRANSPORT_*).
+//   The mode switch moves it with the cable still in, and USB stays enumerated:
+//   a host on USB learns it's on 2.4 GHz from this
 
 #define HOST_PROTOCOL_VERSION 10
 
@@ -161,6 +165,13 @@ enum host_setting_id {
 };
 
 #define HOST_STATE_UNSUPPORTED 255
+
+// GET_STATE [8]
+enum host_transport {
+    HOST_TRANSPORT_USB       = 0,
+    HOST_TRANSPORT_2_4GHZ    = 1,
+    HOST_TRANSPORT_BLUETOOTH = 2,
+};
 
 // NOTIFY_MODS bits (X11 / Hyprland modmask)
 enum host_mod_bits {

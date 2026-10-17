@@ -121,6 +121,20 @@ void notify_usb_device_state_change_user(struct usb_device_state usb_device_stat
     }
 }
 
+static uint8_t host_transport(void) {
+#ifdef LK_WIRELESS_ENABLE
+    switch (get_transport()) {
+        case TRANSPORT_P2P4:
+            return HOST_TRANSPORT_2_4GHZ;
+        case TRANSPORT_BLUETOOTH:
+            return HOST_TRANSPORT_BLUETOOTH;
+        default:
+            break;
+    }
+#endif
+    return HOST_TRANSPORT_USB;
+}
+
 static uint8_t link_packet_len(uint8_t link) {
     return link == HOST_LINK_WIRELESS ? HOST_WL_PACKET_LEN : HOST_PACKET_LEN;
 }
@@ -247,7 +261,7 @@ static void wl_send_heartbeat(bool idle) {
     uint8_t packet[HOST_PACKET_LEN] = {0};
     packet[0]                       = HOST_PING;
     packet[1]                       = idle ? HOST_HEARTBEAT_IDLE : HOST_HEARTBEAT_ACTIVE;
-    packet[2]                       = overlay_loaded();
+    packet[2]                       = overlay_shown();
     host_send(HOST_LINK_WIRELESS, packet);
     wl_last_beat = timer_read32();
 }
@@ -298,6 +312,7 @@ bool host_protocol_rx(uint8_t link, uint8_t *data, uint8_t length) {
 
         case HOST_GET_STATE:
             read_state(&reply[1]);
+            reply[1 + HOST_STATE_LEN] = host_transport();
             host_send(link, reply);
             break;
 
@@ -428,9 +443,16 @@ void host_notify_rgb_key(uint8_t key) {
 static void wl_task(void) {
     if (!wl_link_mode()) {
         // Left 2.4 GHz: whoever is on the other end now introduces itself
-        // again, and the lighting there was its
+        // again, and the lighting there was its. To USB the mode stays: this
+        // can run after the USB host already set its direct mode (the scan
+        // loop pauses while the switch suspends the keyboard), and USB's
+        // handback covers a computer without one
         wl_host = wl_confirmed = wl_idle = wl_was_connected = wl_handback_armed = false;
-        overlay_release();
+        if (get_transport() == TRANSPORT_USB) {
+            overlay_forget();
+        } else {
+            overlay_release();
+        }
         return;
     }
     bool connected = wireless_get_state() == WT_CONNECTED;
@@ -454,6 +476,10 @@ static void wl_task(void) {
         wl_host = true;
     }
     if (!wl_host) return;
+
+    // While its host listens, the RGB keys go to it: anything else that
+    // switched the effect was the firmware's own reset, not the user
+    if (wl_listening()) overlay_reassert();
 
     if (wl_keyboard_idle()) {
         if (!wl_idle && timer_elapsed32(wl_last_contact) >= HOST_WL_QUIET_MS) {
