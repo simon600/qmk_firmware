@@ -38,6 +38,7 @@
 //   - the heartbeat's [2] is 1 while the host's lighting (0xCA, protocol 10)
 //     is on the keys: 0 after a power cycle, a handback or a local effect
 //     change, so the host sends it again
+//   - its [3] [4] are the battery (protocol 11, as GET_STATE [9] [10])
 // NOTIFY_STATE goes to such a host too, and NOTIFY_RGB_KEY while its lighting
 // is loaded. NOTIFY_MODS and NOTIFY_HANDBACK stay on USB: the keyboard draws
 // the modifier highlight itself (overlay.h).
@@ -111,8 +112,11 @@
 //   GET_STATE only (protocol 10): [8] what typing goes over (HOST_TRANSPORT_*).
 //   The mode switch moves it with the cable still in, and USB stays enumerated:
 //   a host on USB learns it's on 2.4 GHz from this
+//   (protocol 11) [9] battery percent (255 unknown: no battery, or not measured
+//   yet; the module measures it only while typing goes over the air, so on USB
+//   it's the last reading), [10] power (HOST_POWER_*)
 
-#define HOST_PROTOCOL_VERSION 10
+#define HOST_PROTOCOL_VERSION 11
 
 enum host_command_id {
     HOST_GET_INFO               = 0xC0,
@@ -165,6 +169,16 @@ enum host_setting_id {
 };
 
 #define HOST_STATE_UNSUPPORTED 255
+
+// GET_STATE [10], heartbeat [4]
+enum host_power {
+    HOST_POWER_BATTERY  = 0,
+    HOST_POWER_CHARGING = 1,
+    // Cable in, battery full
+    HOST_POWER_FULL = 2,
+};
+
+#define HOST_BATTERY_UNKNOWN 255
 
 // GET_STATE [8]
 enum host_transport {

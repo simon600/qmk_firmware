@@ -8,6 +8,8 @@
 #    include "wireless.h"
 #    include "keychron_raw_hid.h"
 #    include "overlay.h"
+#    include "battery.h"
+#    include "lpm.h"
 #endif
 #ifdef ANANLOG_MATRIX
 #    include "profile.h"
@@ -133,6 +135,23 @@ static uint8_t host_transport(void) {
     }
 #endif
     return HOST_TRANSPORT_USB;
+}
+
+// [0] battery percent (HOST_BATTERY_UNKNOWN), [1] HOST_POWER_*
+static void read_battery(uint8_t *out) {
+    out[0] = HOST_BATTERY_UNKNOWN;
+    out[1] = HOST_POWER_BATTERY;
+#ifdef LK_WIRELESS_ENABLE
+    // 0 until the module has measured it once
+    if (battery_get_voltage() > 0) out[0] = battery_get_percentage();
+    if (usb_power_connected()) {
+#    ifdef BAT_CHARGING_PIN
+        out[1] = gpio_read_pin(BAT_CHARGING_PIN) == BAT_CHARGING_LEVEL ? HOST_POWER_CHARGING : HOST_POWER_FULL;
+#    else
+        out[1] = HOST_POWER_CHARGING;
+#    endif
+    }
+#endif
 }
 
 static uint8_t link_packet_len(uint8_t link) {
@@ -262,6 +281,7 @@ static void wl_send_heartbeat(bool idle) {
     packet[0]                       = HOST_PING;
     packet[1]                       = idle ? HOST_HEARTBEAT_IDLE : HOST_HEARTBEAT_ACTIVE;
     packet[2]                       = overlay_shown();
+    read_battery(&packet[3]);
     host_send(HOST_LINK_WIRELESS, packet);
     wl_last_beat = timer_read32();
 }
@@ -313,6 +333,7 @@ bool host_protocol_rx(uint8_t link, uint8_t *data, uint8_t length) {
         case HOST_GET_STATE:
             read_state(&reply[1]);
             reply[1 + HOST_STATE_LEN] = host_transport();
+            read_battery(&reply[2 + HOST_STATE_LEN]);
             host_send(link, reply);
             break;
 
