@@ -10,6 +10,11 @@ OPENRGB_ENABLE = yes
 SIGNALRGB_ENABLE = yes
 OPT_DEFS += -DOPENRGB_ENABLE -DSIGNALRGB_ENABLE
 
+# Raw HID over 2.4 GHz / Bluetooth: the module relays the 32-byte interface
+# (0xFF60 on the Keychron Link) and its reports reach via_raw_hid_receive.
+# Keychron's spelling.
+OPT_DEFS += -DWILRESS_RAW_ENABLE
+
 # The STM32F401 has three endpoints; XInput's goes to the second raw HID
 # interface. Gamepad mode stays as the HID joystick on the shared endpoint.
 OPT_DEFS := $(filter-out -DXINPUT_ENABLE,$(OPT_DEFS))
