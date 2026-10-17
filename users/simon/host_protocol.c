@@ -29,6 +29,9 @@
 // sends a heartbeat this often; the host answers each one
 #define HOST_WL_PACKET_LEN 32
 #define HOST_HEARTBEAT_MS 2000
+// Reports the keyboard sends back to back get lost: an idle notice waits this
+// long after the host's last packet (its queries come one at a time)
+#define HOST_WL_QUIET_MS 250
 
 static uint32_t last_state_check;
 static uint8_t  baseline_state[HOST_STATE_LEN];
@@ -55,8 +58,9 @@ static uint32_t      handback_since;
 static bool handed_back = true;
 
 #ifdef LK_WIRELESS_ENABLE
-// 2.4 GHz host. The keyboard only speaks once a host has: then it sends a
-// heartbeat while in use and goes quiet when the backlight times out, so the
+// 2.4 GHz host. The keyboard speaks once a host has, or once to say it's
+// there when the link comes up: then it sends a heartbeat while in use and
+// goes quiet when the backlight times out, so the
 // host never has to send anything to a keyboard that may be asleep (any packet
 // would wake it, and a wake keeps it up for another 30 minutes). Sleep keeps
 // RAM, so the host is remembered across sleep and link drops; it's forgotten
@@ -333,9 +337,9 @@ bool host_protocol_rx(uint8_t link, uint8_t *data, uint8_t length) {
 
 #ifdef LK_WIRELESS_ENABLE
     // A host that speaks up while the keyboard is idle (e.g. it just started)
-    // hears so, and waits for the next heartbeat
-    if (link == HOST_LINK_WIRELESS && wl_idle) {
-        wl_send_heartbeat(true);
+    // hears so once it's done, and waits for the next heartbeat
+    if (link == HOST_LINK_WIRELESS) {
+        wl_idle = false;
     }
 #endif
     return true;
@@ -394,10 +398,17 @@ static void wl_task(void) {
     bool connected = wireless_get_state() == WT_CONNECTED;
     bool came_up   = connected && !wl_was_connected;
     wl_was_connected = connected;
-    if (!connected || !wl_host) return;
+    if (!connected) return;
+    if (came_up && !wl_host) {
+        // The link just came up (power on, back to 2.4 GHz, reconnect) and no
+        // host is known: a host waiting quietly on the other end can't know
+        // the keyboard is back, so it gets a heartbeat. Kept only if it answers.
+        wl_host = true;
+    }
+    if (!wl_host) return;
 
     if (wl_keyboard_idle()) {
-        if (!wl_idle) {
+        if (!wl_idle && timer_elapsed32(wl_last_contact) >= HOST_WL_QUIET_MS) {
             wl_idle = true;
             wl_send_heartbeat(true);
         }

@@ -20,13 +20,17 @@
 // 0xFF60, 32-byte reports, shared with VIA; OpenRGB's ids collide with VIA's
 // there). Every packet fits in 32 bytes; one request at a time (the link drops
 // reports sent back to back). Bluetooth is left alone.
-// The keyboard there says nothing until a host has spoken, then runs the link:
-//   - while in use it sends a heartbeat (PING [1] 0) every 2 s, right away
+// The keyboard there says nothing until a host has spoken, or once (a single
+// heartbeat, then 6 s for an answer) when the link comes up: power on, back to
+// 2.4 GHz, reconnect. Then it runs the link:
+//   - while in use it sends a heartbeat (PING [1] 0) 2 s after the host's last
+//     packet or its own last heartbeat, right away
 //     when it's used again or the link comes back. The host answers each with
 //     any command (PING will do) and sends only between a heartbeat and the
 //     idle notice
 //   - when the backlight times out (no keys), PING [1] 1, idle, once, and again
-//     in answer to a host that speaks while it's idle. The host then keeps
+//     after a host that speaks while it's idle is done (250 ms of quiet: reports
+//     sent back to back get lost). The host then keeps
 //     quiet until the next heartbeat: any packet would wake a sleeping keyboard
 //     and keep it awake for another 30 minutes
 //   - 6 s after a heartbeat without an answer it takes the host to be gone,
