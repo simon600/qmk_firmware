@@ -140,10 +140,24 @@ static void register_activity(void) {
     }
 }
 
+// The keyboard's own brightness per link (see KEYBOARD BRIGHTNESS PER LINK)
+#define KB_BRIGHTNESS_MAGIC 0xB5
+#define KB_BRIGHTNESS_USB_DEFAULT 255
+#define KB_BRIGHTNESS_WIRELESS_DEFAULT 128
+static uint8_t kb_link(void);
+static void    kb_brightness_save(void);
+static void    kb_brightness_apply(void);
+static uint8_t kb_brightness[2];
+
 // Persist the live brightness alone. rgb_matrix_*_val() would flush the whole
 // config, mode included, and saving the direct mode a host is streaming in
 // would boot into a blank frame buffer.
 static void save_brightness(void) {
+    // The link's own value too (the brightness keys are the keyboard's)
+    if (kb_brightness[kb_link()] != rgb_matrix_get_val()) {
+        kb_brightness[kb_link()] = rgb_matrix_get_val();
+        kb_brightness_save();
+    }
     rgb_config_t stored;
     eeconfig_read_rgb_matrix(&stored);
     if (stored.hsv.v != rgb_matrix_config.hsv.v) {
@@ -186,6 +200,9 @@ static void save_rgb_enable(void) {
 static bool rgb_key_to_host(uint16_t keycode, keyrecord_t *record) {
 #ifdef HOST_PROTOCOL_ENABLE
     if (!host_owns_lighting() || !host_takes_rgb_keys()) return false;
+    // The keyboard's own brightness where the keymap says so (Fn + the
+    // brightness keys): direct mode is drawn at it
+    if ((keycode == UG_VALU || keycode == UG_VALD) && brightness_keys_are_keyboard_user()) return false;
 #    ifdef SIGNALRGB_ENABLE
     if (signalrgb_is_streaming()) return false;
 #    endif
@@ -295,9 +312,11 @@ static bool get_base_color(uint8_t led, rgb_led_t *out) {
             return true;
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
         case RGB_MATRIX_CUSTOM_SIGNALRGB: {
-            // Same as the SIGNALRGB effect in rgb_matrix_user.inc
+            // Same as the direct-mode drawing (indicator hook, or the
+            // SIGNALRGB effect in rgb_matrix_user.inc)
             uint8_t val = rgb_matrix_get_val();
 #    if defined(HOST_PROTOCOL_ENABLE) && defined(LK_WIRELESS_ENABLE)
+            val         = keyboard_brightness_get();
             rgb_led_t c = overlay_color(led);
 #    else
             rgb_led_t c = srgb_led_buffer[led];
@@ -417,6 +436,9 @@ void eeconfig_init_user(void) {
     user_config_save();
     indicator_colors_reset(true);
     layer_dim_set(LAYER_DIM_DEFAULT, true);
+    kb_brightness[0] = KB_BRIGHTNESS_USB_DEFAULT;
+    kb_brightness[1] = KB_BRIGHTNESS_WIRELESS_DEFAULT;
+    kb_brightness_save();
 }
 
 uint8_t layer_dim_get(void) {
@@ -428,6 +450,69 @@ void layer_dim_set(uint8_t dim, bool persist) {
 #if (EECONFIG_USER_DATA_SIZE) > 0
     if (persist) eeconfig_update_user_datablock(&layer_dim, offsetof(user_data_t, layer_dim), sizeof(layer_dim));
 #endif
+}
+
+// --- KEYBOARD BRIGHTNESS PER LINK ---
+
+static uint8_t kb_brightness[2] = {KB_BRIGHTNESS_USB_DEFAULT, KB_BRIGHTNESS_WIRELESS_DEFAULT};
+
+// 0 USB, 1 over the air
+static uint8_t kb_link(void) {
+#ifdef LK_WIRELESS_ENABLE
+    return (get_transport() & TRANSPORT_WIRELESS) ? 1 : 0;
+#else
+    return 0;
+#endif
+}
+
+static void kb_brightness_save(void) {
+#if (EECONFIG_USER_DATA_SIZE) > 0
+    uint8_t magic = KB_BRIGHTNESS_MAGIC;
+    eeconfig_update_user_datablock(&magic, offsetof(user_data_t, kb_brightness_magic), sizeof(magic));
+    eeconfig_update_user_datablock(kb_brightness, offsetof(user_data_t, kb_brightness), sizeof(kb_brightness));
+#endif
+}
+
+static void kb_brightness_load(void) {
+#if (EECONFIG_USER_DATA_SIZE) > 0
+    uint8_t magic = 0;
+    eeconfig_read_user_datablock(&magic, offsetof(user_data_t, kb_brightness_magic), sizeof(magic));
+    if (magic == KB_BRIGHTNESS_MAGIC) {
+        eeconfig_read_user_datablock(kb_brightness, offsetof(user_data_t, kb_brightness), sizeof(kb_brightness));
+    } else {
+#    ifndef LK_WIRELESS_ENABLE
+        // A wired keyboard keeps the brightness it had (on a wireless one,
+        // direct mode was drawn at full brightness until now)
+        kb_brightness[0] = rgb_matrix_get_val();
+#    endif
+        kb_brightness_save();
+    }
+#endif
+}
+
+// The link's brightness on the keys; the inactivity dim restores it later
+static void kb_brightness_apply(void) {
+    uint8_t value = kb_brightness[kb_link()];
+    if (dimming_state.is_dimmed) {
+        dimming_state.saved_brightness = value;
+    } else if (rgb_matrix_get_val() != value) {
+        rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), value);
+    }
+}
+
+uint8_t keyboard_brightness_get(void) {
+    return kb_brightness[kb_link()];
+}
+
+// From the host: the same range as the brightness keys
+void keyboard_brightness_set(uint8_t value) {
+    if (user_config.bg_blackout_mode) {
+        user_config.bg_blackout_mode = false;
+        user_config_save();
+    }
+    kb_brightness[kb_link()] = MAX(value, MIN_SAFE_BRIGHTNESS);
+    kb_brightness_save();
+    kb_brightness_apply();
 }
 
 user_config_t *get_user_config(void) {
@@ -509,6 +594,8 @@ void keyboard_post_init_shared(void) {
     }
     indicator_colors_load();
     layer_dim_load();
+    kb_brightness_load();
+    kb_brightness_apply();
 
     // Show indicators briefly on startup
     indicators_wake();
@@ -551,7 +638,11 @@ static void restore_rgb_after_transport_change(void) {
             rgb_matrix_mode_noeeprom(rgb_matrix_config.mode);
         }
     }
-    last_transport = transport;
+    // Each link has its own brightness (dimmer over the air: battery)
+    if (transport != last_transport) {
+        last_transport = transport;
+        kb_brightness_apply();
+    }
     live_config    = rgb_matrix_config;
 }
 #endif
@@ -711,6 +802,9 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             // frames too (SignalRGB, or OpenRGB without kbd-daemon).
             if (rgb_key_to_host(keycode, record)) return false;
             if (record->event.pressed) {
+                // From this link's brightness: Keychron's LED re-init on a
+                // transport change reloads the saved one (the other link's)
+                kb_brightness_apply();
                 if (user_config.bg_blackout_mode) {
                     user_config.bg_blackout_mode = false;
                     user_config_save();
@@ -730,6 +824,7 @@ bool process_record_shared(uint16_t keycode, keyrecord_t *record) {
             // See UG_VALU
             if (rgb_key_to_host(keycode, record)) return false;
             if (record->event.pressed) {
+                kb_brightness_apply();
                 uint8_t current_val = rgb_matrix_get_val();
                 if (current_val <= MIN_SAFE_BRIGHTNESS + RGB_MATRIX_VAL_STEP) {
                     rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), MIN_SAFE_BRIGHTNESS);
@@ -861,13 +956,16 @@ bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
     openrgb_reassert_pending_hsv();
 #endif
 #if defined(HOST_PROTOCOL_ENABLE) && defined(LK_WIRELESS_ENABLE)
-    // The 2.4 GHz host's overlays on its direct-mode base (overlay.h). Drawn
-    // here, first: the SignalRGB module's direct-mode effect is the one linked
-    if (overlay_loaded() && rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB) {
+    // Direct mode, drawn again here first: the host's frames, or its 2.4 GHz
+    // overlays on its base (overlay.h), at the keyboard's own brightness for
+    // the link. The SignalRGB module's effect, the one linked, draws the
+    // buffer as it is. The inactivity dim (val) leaves a host's lighting alone
+    if (rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB) {
         if (led_min == 0) overlay_frame();
+        uint8_t level = keyboard_brightness_get();
         for (uint8_t i = led_min; i < led_max; i++) {
             rgb_led_t c = overlay_color(i);
-            rgb_matrix_set_color(i, c.r, c.g, c.b);
+            rgb_matrix_set_color(i, (uint16_t)c.r * level / 255, (uint16_t)c.g * level / 255, (uint16_t)c.b * level / 255);
         }
     }
 #endif

@@ -231,6 +231,12 @@ static void gaming_set(uint8_t state) {
 }
 
 #ifdef HOST_PROTOCOL_ENABLE
+// Fn + the brightness keys dim the keyboard alone; the Hardware layer's (knob,
+// W / S) the host's whole lighting
+bool brightness_keys_are_keyboard_user(void) {
+    return !layer_state_is(HARDWARE) && !layer_state_is(HARDWARE2);
+}
+
 uint8_t host_gaming_state_user(void) {
     return gaming_profile_state;
 }

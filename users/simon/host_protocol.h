@@ -65,7 +65,12 @@
 //   0xC4 SET_INDICATOR_COLOR [1] wire id, [2] state, [3..5] r g b, [6] persist
 //   0xC5 SET_SETTING    [1] setting, [2] value, [3] persist
 //                       (1 indicator brightness, 2 indicators always on, 3 blackout,
-//                       4 layer dim: other keys while an FN layer shows)
+//                       4 layer dim: other keys while an FN layer shows,
+//                       5 wireless backlight timeout in 10 s units (protocol 12;
+//                       always saved, Keychron's own setting: the Launcher's too),
+//                       6 the keyboard's own brightness for the link typing goes
+//                       over (protocol 12; always saved; Fn + the brightness keys
+//                       change it on the keyboard))
 //   0xC6 RESET_INDICATOR_COLORS [1] persist   (back to the firmware defaults)
 //   0xC7 RELOAD_INDICATOR_COLORS               (back to the saved colours and layer
 //                       dim: drops unsaved host overrides, e.g. an OpenRGB profile's)
@@ -88,7 +93,10 @@
 //                       profile, 3 brightness up, 4 brightness down, 5 lights
 //                       on/off. Sent instead
 //                       of acting on the key while a host streams direct mode
-//                       (USB) or its lighting is loaded (2.4 GHz)
+//                       (USB) or its lighting is loaded (2.4 GHz). The brightness
+//                       keys where the keymap says so (brightness_keys_are_
+//                       keyboard_user: Fn + them) stay on the keyboard: its own
+//                       brightness, which direct mode is drawn at
 //   0xCE NOTIFY_MODS    (keyboard -> host) [1] held modifiers as an X11 /
 //                       Hyprland modmask (1 shift, 4 ctrl, 8 alt, 64 super; left
 //                       and right alike). Sent once they've been held for 200 ms,
@@ -115,8 +123,11 @@
 //   (protocol 11) [9] battery percent (255 unknown: no battery, or not measured
 //   yet; the module measures it only while typing goes over the air, so on USB
 //   it's the last reading), [10] power (HOST_POWER_*)
+//   (protocol 12) [11] wireless backlight timeout in 10 s units (0: none),
+//   [12] the keyboard's own brightness for this link (setting 6).
+//   NOTIFY_STATE carries [8..12] too, and goes out when [12] changes
 
-#define HOST_PROTOCOL_VERSION 11
+#define HOST_PROTOCOL_VERSION 12
 
 enum host_command_id {
     HOST_GET_INFO               = 0xC0,
@@ -166,6 +177,8 @@ enum host_setting_id {
     HOST_SETTING_INDICATORS_ALWAYS_ON = 2,
     HOST_SETTING_BLACKOUT             = 3,
     HOST_SETTING_LAYER_DIM            = 4,
+    HOST_SETTING_WIRELESS_BACKLIGHT   = 5,
+    HOST_SETTING_KEYBOARD_BRIGHTNESS  = 6,
 };
 
 #define HOST_STATE_UNSUPPORTED 255
@@ -231,6 +244,10 @@ uint8_t host_gaming_state_user(void);
 bool    host_gaming_set_user(uint8_t state);
 // Keymap hook: which base layer is active (HOST_BASE_LAYER_*)
 uint8_t host_base_layer_user(void);
+// Keymap hook: the brightness keys pressed now change the keyboard's own
+// brightness rather than going to the host's whole lighting (3 / 4); default:
+// the whole lighting
+bool brightness_keys_are_keyboard_user(void);
 // User hook: USB came back (wake, KVM switch) and no host listened within 15 s;
 // lighting a host left on the keys should go back to the keyboard's own.
 // Returns true if there was any (the next host gets NOTIFY_HANDBACK).

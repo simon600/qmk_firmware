@@ -10,6 +10,7 @@
 #    include "overlay.h"
 #    include "battery.h"
 #    include "lpm.h"
+#    include "indicator.h"
 #endif
 #ifdef ANANLOG_MATRIX
 #    include "profile.h"
@@ -38,6 +39,7 @@
 
 static uint32_t last_state_check;
 static uint8_t  baseline_state[HOST_STATE_LEN];
+static uint8_t  baseline_kb_brightness;
 static bool     baseline_valid;
 static bool     notify_pending;
 
@@ -93,6 +95,32 @@ __attribute__((weak)) uint8_t host_base_layer_user(void) {
 __attribute__((weak)) bool host_handback_user(void) {
     return false;
 }
+
+__attribute__((weak)) bool brightness_keys_are_keyboard_user(void) {
+    return false;
+}
+
+#if defined(LK_WIRELESS_ENABLE) && defined(EECONFIG_BASE_WIRELESS_CONFIG)
+// Keychron's (wireless.c): seconds, and its EEPROM save
+extern uint16_t backlit_disable_time;
+void            wireless_config_save(void);
+
+static uint16_t wireless_backlight_timeout(void) {
+    return backlit_disable_time;
+}
+
+// Not through wireless_lpm_set(), the Launcher's: that reconfigures the
+// wireless module too, and doing so as a USB host switched to direct mode
+// lost its lighting. The module only takes the idle time, which stays.
+static void set_wireless_backlight_timeout(uint16_t seconds) {
+    backlit_disable_time = seconds;
+    wireless_config_save();
+    if ((get_transport() & TRANSPORT_WIRELESS) && wireless_get_state() == WT_CONNECTED) {
+        indicator_set_backlit_timeout(seconds * 1000UL);
+        indicator_reset_backlit_time();
+    }
+}
+#endif
 
 // The host is the computer on USB: while typing goes elsewhere (wireless, cable
 // pulled, host asleep) there's nobody to notify
@@ -183,10 +211,22 @@ static void read_state(uint8_t *out) {
     out[6] = layer_dim_get();
 }
 
+// GET_STATE / NOTIFY_STATE past the state block: [8] transport, [9] [10]
+// battery, [11] wireless backlight timeout, [12] keyboard brightness
+static void read_state_extras(uint8_t *packet) {
+    packet[1 + HOST_STATE_LEN] = host_transport();
+    read_battery(&packet[2 + HOST_STATE_LEN]);
+#if defined(LK_WIRELESS_ENABLE) && defined(EECONFIG_BASE_WIRELESS_CONFIG)
+    packet[4 + HOST_STATE_LEN] = MIN(wireless_backlight_timeout() / 10, 255);
+#endif
+    packet[5 + HOST_STATE_LEN] = keyboard_brightness_get();
+}
+
 // After a host command changed state, adopt it so it isn't echoed as a keyboard-side change
 static void rebaseline(void) {
     read_state(baseline_state);
-    baseline_valid = true;
+    baseline_kb_brightness = keyboard_brightness_get();
+    baseline_valid         = true;
 }
 
 static int8_t indicator_by_wire_id(uint8_t wire) {
@@ -254,10 +294,19 @@ static void set_setting(uint8_t setting, uint8_t value, bool persist) {
         case HOST_SETTING_LAYER_DIM:
             layer_dim_set(value, persist);
             break;
+        case HOST_SETTING_KEYBOARD_BRIGHTNESS:
+            keyboard_brightness_set(value);
+            break;
         case HOST_SETTING_BLACKOUT:
             cfg->bg_blackout_mode = value != 0;
             if (persist) user_config_save();
             break;
+#if defined(LK_WIRELESS_ENABLE) && defined(EECONFIG_BASE_WIRELESS_CONFIG)
+        case HOST_SETTING_WIRELESS_BACKLIGHT:
+            // Keychron keeps it at 5 s or more
+            if (value > 0) set_wireless_backlight_timeout(value * 10);
+            break;
+#endif
     }
 }
 
@@ -332,8 +381,7 @@ bool host_protocol_rx(uint8_t link, uint8_t *data, uint8_t length) {
 
         case HOST_GET_STATE:
             read_state(&reply[1]);
-            reply[1 + HOST_STATE_LEN] = host_transport();
-            read_battery(&reply[2 + HOST_STATE_LEN]);
+            read_state_extras(reply);
             host_send(link, reply);
             break;
 
@@ -565,14 +613,17 @@ void host_protocol_task(void) {
 
     uint8_t current[HOST_STATE_LEN];
     read_state(current);
+    uint8_t kb_brightness = keyboard_brightness_get();
     if (!baseline_valid) {
         memcpy(baseline_state, current, HOST_STATE_LEN);
-        baseline_valid = true;
+        baseline_kb_brightness = kb_brightness;
+        baseline_valid         = true;
         return;
     }
-    if (memcmp(current, baseline_state, HOST_STATE_LEN) != 0) {
+    if (memcmp(current, baseline_state, HOST_STATE_LEN) != 0 || kb_brightness != baseline_kb_brightness) {
         memcpy(baseline_state, current, HOST_STATE_LEN);
-        notify_pending = true;
+        baseline_kb_brightness = kb_brightness;
+        notify_pending         = true;
     }
     // Without a listening host the change is simply adopted: a host reads the
     // whole state when it connects (or, over 2.4 GHz, on the next heartbeat)
@@ -580,6 +631,7 @@ void host_protocol_task(void) {
         uint8_t packet[HOST_PACKET_LEN] = {0};
         packet[0]                       = HOST_NOTIFY_STATE;
         memcpy(&packet[1], baseline_state, HOST_STATE_LEN);
+        read_state_extras(packet);
         if (host_listening()) {
             host_send(HOST_LINK_USB, packet);
         }

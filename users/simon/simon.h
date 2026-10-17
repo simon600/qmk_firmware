@@ -151,6 +151,10 @@ typedef struct {
     user_config_t config;
     rgb_led_t     indicator_colors[INDICATOR_COUNT][INDICATOR_MAX_STATES];
     uint8_t       layer_dim;
+    // The keyboard's own brightness (rgb val) per link, valid once the magic
+    // is there: added after the rest, so older data keeps its version
+    uint8_t kb_brightness_magic;
+    uint8_t kb_brightness[2]; // USB, over the air
 } user_data_t;
 #endif
 
@@ -215,4 +219,9 @@ void           indicator_colors_reset(bool persist);
 void           indicator_colors_reload(void);
 uint8_t        layer_dim_get(void);
 void           layer_dim_set(uint8_t dim, bool persist);
+// The keyboard's own brightness for the link typing goes over (USB, or the
+// air: lower, it's on battery). Fn + the brightness keys change it; direct
+// mode (a host's lighting) is drawn at it. Saved per link
+uint8_t        keyboard_brightness_get(void);
+void           keyboard_brightness_set(uint8_t value);
 
