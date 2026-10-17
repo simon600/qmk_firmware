@@ -9,6 +9,8 @@ ifeq ($(OPENRGB_ENABLE), yes)
     # Host protocol (kbd-daemon): on the OpenRGB packets' interface, the second
     # raw HID one with RGB_RAW_ENABLE (see host_raw.h)
     SRC += host_protocol.c
+    # The host's lighting over 2.4 GHz, drawn here (wireless keyboards only)
+    SRC += overlay.c
     OPT_DEFS += -DHOST_PROTOCOL_ENABLE
 endif
 

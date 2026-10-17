@@ -4,6 +4,7 @@
 #endif
 #ifdef HOST_PROTOCOL_ENABLE
 #    include "host_protocol.h"
+#    include "overlay.h"
 #endif
 #include "keychron_common.h"
 #include "print.h"
@@ -184,7 +185,7 @@ static void save_rgb_enable(void) {
 // one it stays local, so UG_NEXT always gets out of a mode whose host is gone.
 static bool rgb_key_to_host(uint16_t keycode, keyrecord_t *record) {
 #ifdef HOST_PROTOCOL_ENABLE
-    if (!host_owns_lighting() || !host_listening()) return false;
+    if (!host_owns_lighting() || !host_takes_rgb_keys()) return false;
 #    ifdef SIGNALRGB_ENABLE
     if (signalrgb_is_streaming()) return false;
 #    endif
@@ -294,11 +295,16 @@ static bool get_base_color(uint8_t led, rgb_led_t *out) {
             return true;
 #if defined(SIGNALRGB_ENABLE) || defined(OPENRGB_ENABLE)
         case RGB_MATRIX_CUSTOM_SIGNALRGB: {
-            // Same scaling as the SIGNALRGB effect in rgb_matrix_user.inc
+            // Same as the SIGNALRGB effect in rgb_matrix_user.inc
             uint8_t val = rgb_matrix_get_val();
-            out->r      = (uint16_t)srgb_led_buffer[led].r * val / 255;
-            out->g      = (uint16_t)srgb_led_buffer[led].g * val / 255;
-            out->b      = (uint16_t)srgb_led_buffer[led].b * val / 255;
+#    if defined(HOST_PROTOCOL_ENABLE) && defined(LK_WIRELESS_ENABLE)
+            rgb_led_t c = overlay_color(led);
+#    else
+            rgb_led_t c = srgb_led_buffer[led];
+#    endif
+            out->r = (uint16_t)c.r * val / 255;
+            out->g = (uint16_t)c.g * val / 255;
+            out->b = (uint16_t)c.b * val / 255;
             return true;
         }
 #endif
@@ -853,6 +859,17 @@ static uint8_t get_ext_rgb_max_brightness(void) {
 bool rgb_matrix_indicators_advanced_shared(uint8_t led_min, uint8_t led_max) {
 #ifdef OPENRGB_ENABLE
     openrgb_reassert_pending_hsv();
+#endif
+#if defined(HOST_PROTOCOL_ENABLE) && defined(LK_WIRELESS_ENABLE)
+    // The 2.4 GHz host's overlays on its direct-mode base (overlay.h). Drawn
+    // here, first: the SignalRGB module's direct-mode effect is the one linked
+    if (overlay_loaded() && rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_SIGNALRGB) {
+        if (led_min == 0) overlay_frame();
+        for (uint8_t i = led_min; i < led_max; i++) {
+            rgb_led_t c = overlay_color(i);
+            rgb_matrix_set_color(i, c.r, c.g, c.b);
+        }
+    }
 #endif
     if (user_config.bg_blackout_mode) {
         for (uint8_t i = led_min; i < led_max; i++) {

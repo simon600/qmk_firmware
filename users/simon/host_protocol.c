@@ -7,6 +7,7 @@
 #    include "transport.h"
 #    include "wireless.h"
 #    include "keychron_raw_hid.h"
+#    include "overlay.h"
 #endif
 #ifdef ANANLOG_MATRIX
 #    include "profile.h"
@@ -69,6 +70,8 @@ static bool     wl_host;      // a host spoke over 2.4 GHz and hasn't gone silen
 static bool     wl_confirmed; // ...and answered since the keyboard woke / reconnected
 static bool     wl_idle;      // the host was told the keyboard is idle
 static bool     wl_was_connected;
+static bool     wl_handback_armed; // the link came up: a host must speak up within HOST_HANDBACK_MS
+static uint32_t wl_handback_since;
 static uint32_t wl_last_contact;
 static uint32_t wl_last_beat;
 #endif
@@ -91,11 +94,16 @@ __attribute__((weak)) bool host_handback_user(void) {
 
 // The host is the computer on USB: while typing goes elsewhere (wireless, cable
 // pulled, host asleep) there's nobody to notify
-static bool host_link_up(void) {
+static bool on_usb_transport(void) {
 #ifdef LK_WIRELESS_ENABLE
-    if (get_transport() != TRANSPORT_USB) return false;
+    return get_transport() == TRANSPORT_USB;
+#else
+    return true;
 #endif
-    return usb_device_state_get_configure_state() == USB_DEVICE_STATE_CONFIGURED;
+}
+
+static bool host_link_up(void) {
+    return on_usb_transport() && usb_device_state_get_configure_state() == USB_DEVICE_STATE_CONFIGURED;
 }
 
 // Unsaved colour overrides (an OpenRGB profile's) belong to the computer that
@@ -169,7 +177,7 @@ static void reply_info(uint8_t len, uint8_t *reply) {
     features |= HOST_FEATURE_OWN_INTERFACE;
 #endif
 #ifdef LK_WIRELESS_ENABLE
-    features |= HOST_FEATURE_WIRELESS;
+    features |= HOST_FEATURE_WIRELESS | HOST_FEATURE_LIGHTING;
 #endif
     reply[1] = HOST_PROTOCOL_VERSION;
     reply[2] = features;
@@ -239,6 +247,7 @@ static void wl_send_heartbeat(bool idle) {
     uint8_t packet[HOST_PACKET_LEN] = {0};
     packet[0]                       = HOST_PING;
     packet[1]                       = idle ? HOST_HEARTBEAT_IDLE : HOST_HEARTBEAT_ACTIVE;
+    packet[2]                       = overlay_loaded();
     host_send(HOST_LINK_WIRELESS, packet);
     wl_last_beat = timer_read32();
 }
@@ -255,9 +264,10 @@ bool host_protocol_rx(uint8_t link, uint8_t *data, uint8_t length) {
 #ifdef LK_WIRELESS_ENABLE
         // Bluetooth stays as it was: VIA's
         if (!wl_link_mode()) return false;
-        wl_host         = true;
-        wl_confirmed    = true;
-        wl_last_contact = timer_read32();
+        wl_host           = true;
+        wl_confirmed      = true;
+        wl_handback_armed = false;
+        wl_last_contact   = timer_read32();
         // A host that speaks needs no heartbeat for a while; one now would go
         // out right behind the reply, and the link drops reports back to back
         wl_last_beat = wl_last_contact;
@@ -330,6 +340,13 @@ bool host_protocol_rx(uint8_t link, uint8_t *data, uint8_t length) {
             // Contact is all it carries
             break;
 
+#ifdef LK_WIRELESS_ENABLE
+        case HOST_LIGHTING:
+            // USB has OpenRGB's direct mode
+            if (link == HOST_LINK_WIRELESS) overlay_rx(data, length);
+            break;
+#endif
+
         default:
             // Unknown command in our range: swallow it so nobody else answers
             break;
@@ -345,7 +362,7 @@ bool host_protocol_rx(uint8_t link, uint8_t *data, uint8_t length) {
     return true;
 }
 
-static uint8_t read_mods(void) {
+uint8_t host_mods(void) {
     uint8_t mods = get_mods();
     uint8_t out  = 0;
     if (mods & MOD_MASK_SHIFT) out |= HOST_MOD_SHIFT;
@@ -363,7 +380,7 @@ static void notify_mods(void) {
         mods_held = mods_reported = 0;
         return;
     }
-    uint8_t now = read_mods();
+    uint8_t now = host_mods();
     if (now != mods_held) {
         mods_held  = now;
         mods_since = timer_read32();
@@ -381,24 +398,55 @@ bool host_listening(void) {
     return contacted && timer_elapsed32(last_contact) < HOST_LISTEN_TIMEOUT_MS && host_link_up();
 }
 
+#ifdef LK_WIRELESS_ENABLE
+static bool wl_takes_rgb_keys(void) {
+    return wl_listening() && overlay_loaded();
+}
+#endif
+
+bool host_takes_rgb_keys(void) {
+#ifdef LK_WIRELESS_ENABLE
+    if (wl_takes_rgb_keys()) return true;
+#endif
+    return host_listening();
+}
+
 void host_notify_rgb_key(uint8_t key) {
     uint8_t packet[HOST_PACKET_LEN] = {0};
     packet[0]                  = HOST_NOTIFY_RGB_KEY;
     packet[1]                  = key;
+#ifdef LK_WIRELESS_ENABLE
+    if (wl_takes_rgb_keys()) {
+        host_send(HOST_LINK_WIRELESS, packet);
+        return;
+    }
+#endif
     host_send(HOST_LINK_USB, packet);
 }
 
 #ifdef LK_WIRELESS_ENABLE
 static void wl_task(void) {
     if (!wl_link_mode()) {
-        // Left 2.4 GHz: whoever is on the other end now introduces itself again
-        wl_host = wl_confirmed = wl_idle = wl_was_connected = false;
+        // Left 2.4 GHz: whoever is on the other end now introduces itself
+        // again, and the lighting there was its
+        wl_host = wl_confirmed = wl_idle = wl_was_connected = wl_handback_armed = false;
+        overlay_release();
         return;
     }
     bool connected = wireless_get_state() == WT_CONNECTED;
     bool came_up   = connected && !wl_was_connected;
     wl_was_connected = connected;
     if (!connected) return;
+    if (came_up) {
+        wl_handback_armed = true;
+        wl_handback_since = timer_read32();
+    }
+    // The link came back and no host spoke up (another computer, kbd-daemon
+    // gone): its lighting goes, as on USB
+    if (wl_handback_armed && timer_elapsed32(wl_handback_since) >= HOST_HANDBACK_MS) {
+        wl_handback_armed = false;
+        overlay_release();
+    }
     if (came_up && !wl_host) {
         // The link just came up (power on, back to 2.4 GHz, reconnect) and no
         // host is known: a host waiting quietly on the other end can't know
@@ -458,7 +506,9 @@ void host_protocol_task(void) {
     }
     if (handback_armed && timer_elapsed32(handback_since) >= HOST_HANDBACK_MS) {
         handback_armed = false;
-        if (!host_listening() && host_handback_user()) {
+        // Only while typing still goes over USB: on 2.4 GHz the lighting is
+        // that host's (wl_task has its own handback)
+        if (on_usb_transport() && !host_listening() && host_handback_user()) {
             handed_back = true;
         }
     }

@@ -35,8 +35,11 @@
 //     and keep it awake for another 30 minutes
 //   - 6 s after a heartbeat without an answer it takes the host to be gone,
 //     and stays quiet until one speaks again
-// NOTIFY_STATE goes to such a host too. NOTIFY_MODS, NOTIFY_RGB_KEY and
-// NOTIFY_HANDBACK, the lighting's, stay on USB.
+//   - the heartbeat's [2] is 1 while the host's lighting (0xCA, protocol 10)
+//     is loaded: 0 after a power cycle or a handback, so the host sends it again
+// NOTIFY_STATE goes to such a host too, and NOTIFY_RGB_KEY while its lighting
+// is loaded. NOTIFY_MODS and NOTIFY_HANDBACK stay on USB: the keyboard draws
+// the modifier highlight itself (overlay.h).
 //
 // Every reply starts with the command id it answers. Writes never reply, so
 // they can't land in another host program's read queue. Linux hands every
@@ -66,10 +69,13 @@
 //                       dim: drops unsaved host overrides, e.g. an OpenRGB profile's)
 //   0xC8, 0xC9          retired (protocol 3-4 workspace hints; openrgb-daemon
 //                       draws them now from NOTIFY_MODS)
+//   0xCA LIGHTING       [1] op, ...: the host's lighting over 2.4 GHz, drawn by
+//                       the keyboard (overlay.h). No replies; ignored on USB
 //   0xCC PING           heartbeat; any command counts. While the host was heard
 //                       from in the last 6 s (USB), the RGB keys in direct mode
 //                       go to it as NOTIFY_RGB_KEY instead of acting locally.
-//                       Keyboard -> host over 2.4 GHz: [1] 0 in use, 1 idle (above)
+//                       Keyboard -> host over 2.4 GHz: [1] 0 in use, 1 idle,
+//                       [2] 1 the host's lighting is loaded (above)
 //   0xCB NOTIFY_HANDBACK (keyboard -> host) no arguments. The keyboard shows its
 //                       own saved effect: it just started (a reboot the host
 //                       can't see, e.g. USB power cut in S3 and the device
@@ -80,6 +86,7 @@
 //                       profile, 3 brightness up, 4 brightness down, 5 lights
 //                       on/off. Sent instead
 //                       of acting on the key while a host streams direct mode
+//                       (USB) or its lighting is loaded (2.4 GHz)
 //   0xCE NOTIFY_MODS    (keyboard -> host) [1] held modifiers as an X11 /
 //                       Hyprland modmask (1 shift, 4 ctrl, 8 alt, 64 super; left
 //                       and right alike). Sent once they've been held for 200 ms,
@@ -101,7 +108,7 @@
 //   [5] background blackout
 //   [6] base layer (0 unknown, 1 Mac, 2 Linux/Windows)  [7] layer dim (0-255)
 
-#define HOST_PROTOCOL_VERSION 9
+#define HOST_PROTOCOL_VERSION 10
 
 enum host_command_id {
     HOST_GET_INFO               = 0xC0,
@@ -112,6 +119,7 @@ enum host_command_id {
     HOST_SET_SETTING            = 0xC5,
     HOST_RESET_INDICATOR_COLORS = 0xC6,
     HOST_RELOAD_INDICATOR_COLORS = 0xC7,
+    HOST_LIGHTING               = 0xCA,
     HOST_NOTIFY_HANDBACK        = 0xCB,
     HOST_PING                   = 0xCC,
     HOST_NOTIFY_RGB_KEY         = 0xCD,
@@ -129,6 +137,8 @@ enum host_feature_bits {
     HOST_FEATURE_OWN_INTERFACE      = 1 << 5,
     // The host protocol over the 2.4 GHz dongle (protocol 9)
     HOST_FEATURE_WIRELESS           = 1 << 6,
+    // Lighting drawn by the keyboard over 2.4 GHz (0xCA, protocol 10)
+    HOST_FEATURE_LIGHTING           = 1 << 7,
 };
 
 // Where a host command came from, and its reply goes
@@ -183,8 +193,13 @@ void host_protocol_task(void);
 // A host on USB pinged recently: it takes the RGB keys in direct mode (the
 // lighting's host; the 2.4 GHz one doesn't count)
 bool host_listening(void);
-// Hands an RGB key (HOST_RGB_KEY_*) to the host
+// A host takes the RGB keys while its lighting is on the keys: the USB one
+// listening, or the 2.4 GHz one with its lighting loaded
+bool host_takes_rgb_keys(void);
+// Hands an RGB key (HOST_RGB_KEY_*) to that host
 void host_notify_rgb_key(uint8_t key);
+// The modifiers held now (HOST_MOD_*)
+uint8_t host_mods(void);
 
 // Keymap hooks for gaming mode (weak defaults report "unsupported")
 uint8_t host_gaming_state_user(void);
