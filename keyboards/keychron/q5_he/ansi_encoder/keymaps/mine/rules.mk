@@ -11,7 +11,7 @@ SIGNALRGB_ENABLE = yes
 OPT_DEFS += -DOPENRGB_ENABLE -DSIGNALRGB_ENABLE
 
 # Raw HID over 2.4 GHz / Bluetooth: the module relays the 32-byte interface
-# (0xFF60 on the Keychron Link) and its reports reach via_raw_hid_receive.
+# (0xFF60 on the Keychron Link) and its reports reach raw_hid_receive.
 # Keychron's spelling.
 OPT_DEFS += -DWILRESS_RAW_ENABLE
 

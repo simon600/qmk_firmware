@@ -15,6 +15,25 @@
 // longer answers 0x01–0x09 or 0xC0–0xCF. What follows about other programs
 // reading the same reports applies to the shared interface only.
 //
+// Over 2.4 GHz (protocol 9, HOST_FEATURE_WIRELESS) the host protocol, and only
+// it, also runs on the Keychron Link dongle's raw HID interface (usage page
+// 0xFF60, 32-byte reports, shared with VIA; OpenRGB's ids collide with VIA's
+// there). Every packet fits in 32 bytes; one request at a time (the link drops
+// reports sent back to back). Bluetooth is left alone.
+// The keyboard there says nothing until a host has spoken, then runs the link:
+//   - while in use it sends a heartbeat (PING [1] 0) every 2 s, right away
+//     when it's used again or the link comes back. The host answers each with
+//     any command (PING will do) and sends only between a heartbeat and the
+//     idle notice
+//   - when the backlight times out (no keys), PING [1] 1, idle, once, and again
+//     in answer to a host that speaks while it's idle. The host then keeps
+//     quiet until the next heartbeat: any packet would wake a sleeping keyboard
+//     and keep it awake for another 30 minutes
+//   - 6 s after a heartbeat without an answer it takes the host to be gone,
+//     and stays quiet until one speaks again
+// NOTIFY_STATE goes to such a host too. NOTIFY_MODS, NOTIFY_RGB_KEY and
+// NOTIFY_HANDBACK, the lighting's, stay on USB.
+//
 // Every reply starts with the command id it answers. Writes never reply, so
 // they can't land in another host program's read queue. Linux hands every
 // input report to every process that has the hidraw node open, and OpenRGB
@@ -45,7 +64,8 @@
 //                       draws them now from NOTIFY_MODS)
 //   0xCC PING           heartbeat; any command counts. While the host was heard
 //                       from in the last 6 s (USB), the RGB keys in direct mode
-//                       go to it as NOTIFY_RGB_KEY instead of acting locally
+//                       go to it as NOTIFY_RGB_KEY instead of acting locally.
+//                       Keyboard -> host over 2.4 GHz: [1] 0 in use, 1 idle (above)
 //   0xCB NOTIFY_HANDBACK (keyboard -> host) no arguments. The keyboard shows its
 //                       own saved effect: it just started (a reboot the host
 //                       can't see, e.g. USB power cut in S3 and the device
@@ -77,7 +97,7 @@
 //   [5] background blackout
 //   [6] base layer (0 unknown, 1 Mac, 2 Linux/Windows)  [7] layer dim (0-255)
 
-#define HOST_PROTOCOL_VERSION 8
+#define HOST_PROTOCOL_VERSION 9
 
 enum host_command_id {
     HOST_GET_INFO               = 0xC0,
@@ -103,6 +123,20 @@ enum host_feature_bits {
     HOST_FEATURE_RGB_KEYS           = 1 << 4,
     // Host protocol and OpenRGB packets on their own raw HID interface
     HOST_FEATURE_OWN_INTERFACE      = 1 << 5,
+    // The host protocol over the 2.4 GHz dongle (protocol 9)
+    HOST_FEATURE_WIRELESS           = 1 << 6,
+};
+
+// Where a host command came from, and its reply goes
+enum host_link {
+    HOST_LINK_USB,
+    HOST_LINK_WIRELESS,
+};
+
+// PING from the keyboard over 2.4 GHz, [1]
+enum host_heartbeat {
+    HOST_HEARTBEAT_ACTIVE = 0,
+    HOST_HEARTBEAT_IDLE   = 1,
 };
 
 enum host_setting_id {
@@ -137,11 +171,13 @@ enum host_base_layer {
     HOST_BASE_LAYER_LINUX   = 2,
 };
 
-// Returns true when the packet was a host protocol command
-bool host_protocol_rx(uint8_t *data, uint8_t length);
+// Returns true when the packet was a host protocol command. Packets from the
+// 2.4 GHz link that aren't (or come over Bluetooth) are left to VIA.
+bool host_protocol_rx(uint8_t link, uint8_t *data, uint8_t length);
 // Call from the scan loop: sends pending state notifications
 void host_protocol_task(void);
-// A host on USB pinged recently: it takes the RGB keys in direct mode
+// A host on USB pinged recently: it takes the RGB keys in direct mode (the
+// lighting's host; the 2.4 GHz one doesn't count)
 bool host_listening(void);
 // Hands an RGB key (HOST_RGB_KEY_*) to the host
 void host_notify_rgb_key(uint8_t key);

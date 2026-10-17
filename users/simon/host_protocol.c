@@ -5,6 +5,8 @@
 #include "usb_device_state.h"
 #ifdef LK_WIRELESS_ENABLE
 #    include "transport.h"
+#    include "wireless.h"
+#    include "keychron_raw_hid.h"
 #endif
 #ifdef ANANLOG_MATRIX
 #    include "profile.h"
@@ -22,6 +24,11 @@
 #define HOST_HANDBACK_MS 15000
 
 #define HOST_STATE_LEN 7
+
+// 2.4 GHz: the module relays 32-byte reports. While the keyboard is in use it
+// sends a heartbeat this often; the host answers each one
+#define HOST_WL_PACKET_LEN 32
+#define HOST_HEARTBEAT_MS 2000
 
 static uint32_t last_state_check;
 static uint8_t  baseline_state[HOST_STATE_LEN];
@@ -46,6 +53,21 @@ static uint32_t      handback_since;
 // The keyboard shows its own lighting (just started, or took it back); the next
 // host to speak hears about it
 static bool handed_back = true;
+
+#ifdef LK_WIRELESS_ENABLE
+// 2.4 GHz host. The keyboard only speaks once a host has: then it sends a
+// heartbeat while in use and goes quiet when the backlight times out, so the
+// host never has to send anything to a keyboard that may be asleep (any packet
+// would wake it, and a wake keeps it up for another 30 minutes). Sleep keeps
+// RAM, so the host is remembered across sleep and link drops; it's forgotten
+// when the keyboard leaves 2.4 GHz or a host stays silent after a heartbeat.
+static bool     wl_host;      // a host spoke over 2.4 GHz and hasn't gone silent
+static bool     wl_confirmed; // ...and answered since the keyboard woke / reconnected
+static bool     wl_idle;      // the host was told the keyboard is idle
+static bool     wl_was_connected;
+static uint32_t wl_last_contact;
+static uint32_t wl_last_beat;
+#endif
 
 __attribute__((weak)) uint8_t host_gaming_state_user(void) {
     return HOST_STATE_UNSUPPORTED;
@@ -87,7 +109,17 @@ void notify_usb_device_state_change_user(struct usb_device_state usb_device_stat
     }
 }
 
-static void host_send(uint8_t *packet) {
+static uint8_t link_packet_len(uint8_t link) {
+    return link == HOST_LINK_WIRELESS ? HOST_WL_PACKET_LEN : HOST_PACKET_LEN;
+}
+
+static void host_send(uint8_t link, uint8_t *packet) {
+#ifdef LK_WIRELESS_ENABLE
+    if (link == HOST_LINK_WIRELESS) {
+        kc_raw_hid_send(RAW_HID_SRC_WIRELESS, packet, HOST_WL_PACKET_LEN);
+        return;
+    }
+#endif
     host_packet_send(packet);
 }
 
@@ -119,7 +151,7 @@ static int8_t indicator_by_wire_id(uint8_t wire) {
     return -1;
 }
 
-static void reply_info(uint8_t *reply) {
+static void reply_info(uint8_t len, uint8_t *reply) {
     uint8_t features = 0;
     if (host_gaming_state_user() != HOST_STATE_UNSUPPORTED) features |= HOST_FEATURE_GAMING;
 #ifdef ANANLOG_MATRIX
@@ -132,21 +164,24 @@ static void reply_info(uint8_t *reply) {
 #ifdef RGB_RAW_ENABLE
     features |= HOST_FEATURE_OWN_INTERFACE;
 #endif
+#ifdef LK_WIRELESS_ENABLE
+    features |= HOST_FEATURE_WIRELESS;
+#endif
     reply[1] = HOST_PROTOCOL_VERSION;
     reply[2] = features;
     reply[3] = INDICATOR_COUNT;
     reply[4] = INDICATOR_MAX_STATES;
-    strncpy((char *)&reply[5], QMK_BUILDDATE, HOST_PACKET_LEN - 6);
+    strncpy((char *)&reply[5], QMK_BUILDDATE, len - 6);
 }
 
-static void reply_indicators(uint8_t first, uint8_t *reply) {
+static void reply_indicators(uint8_t len, uint8_t first, uint8_t *reply) {
     uint8_t pos   = 4;
     uint8_t count = 0;
     reply[1]      = INDICATOR_COUNT;
     reply[2]      = first;
     for (uint8_t i = first; i < INDICATOR_COUNT; i++) {
         uint8_t states = indicator_state_count(i);
-        if (pos + 3 + states * 3 > HOST_PACKET_LEN) break; // rest on the next page
+        if (pos + 3 + states * 3 > len) break; // rest on the next page
         reply[pos++] = indicator_wire_id(i);
         reply[pos++] = states;
         reply[pos++] = get_indicators()[i].led_index;
@@ -181,30 +216,75 @@ static void set_setting(uint8_t setting, uint8_t value, bool persist) {
     }
 }
 
-bool host_protocol_rx(uint8_t *data, uint8_t length) {
+#ifdef LK_WIRELESS_ENABLE
+static bool wl_link_mode(void) {
+    return get_transport() == TRANSPORT_P2P4;
+}
+
+static bool wl_link_up(void) {
+    return wl_link_mode() && wireless_get_state() == WT_CONNECTED;
+}
+
+// The keyboard's input (keys, encoder) has gone quiet for the backlight timeout
+static bool wl_keyboard_idle(void) {
+    return rgb_matrix_timeouted();
+}
+
+// [1] 0 in use (the host answers with any command, e.g. PING), 1 idle
+static void wl_send_heartbeat(bool idle) {
+    uint8_t packet[HOST_PACKET_LEN] = {0};
+    packet[0]                       = HOST_PING;
+    packet[1]                       = idle ? HOST_HEARTBEAT_IDLE : HOST_HEARTBEAT_ACTIVE;
+    host_send(HOST_LINK_WIRELESS, packet);
+    wl_last_beat = timer_read32();
+}
+
+static bool wl_listening(void) {
+    return wl_host && wl_confirmed && !wl_idle && wl_link_up();
+}
+#endif
+
+bool host_protocol_rx(uint8_t link, uint8_t *data, uint8_t length) {
     if (data[0] < 0xC0 || data[0] > 0xCF) return false;
 
-    last_contact = timer_read32();
-    contacted    = true;
-    if (handed_back) {
-        handed_back                     = false;
-        uint8_t notice[HOST_PACKET_LEN] = {0};
-        notice[0]                       = HOST_NOTIFY_HANDBACK;
-        host_send(notice);
+    if (link == HOST_LINK_WIRELESS) {
+#ifdef LK_WIRELESS_ENABLE
+        // Bluetooth stays as it was: VIA's
+        if (!wl_link_mode()) return false;
+        wl_host         = true;
+        wl_confirmed    = true;
+        wl_last_contact = timer_read32();
+        // A host that speaks needs no heartbeat for a while; one now would go
+        // out right behind the reply, and the link drops reports back to back
+        wl_last_beat = wl_last_contact;
+#else
+        return false;
+#endif
+    } else {
+        last_contact = timer_read32();
+        contacted    = true;
+        // The lighting is the USB host's business
+        if (handed_back) {
+            handed_back                     = false;
+            uint8_t notice[HOST_PACKET_LEN] = {0};
+            notice[0]                       = HOST_NOTIFY_HANDBACK;
+            host_send(HOST_LINK_USB, notice);
+        }
     }
 
+    uint8_t len                    = link_packet_len(link);
     uint8_t reply[HOST_PACKET_LEN] = {0};
-    reply[0]                  = data[0];
+    reply[0]                       = data[0];
 
     switch (data[0]) {
         case HOST_GET_INFO:
-            reply_info(reply);
-            host_send(reply);
+            reply_info(len, reply);
+            host_send(link, reply);
             break;
 
         case HOST_GET_STATE:
             read_state(&reply[1]);
-            host_send(reply);
+            host_send(link, reply);
             break;
 
         case HOST_SET_GAMING:
@@ -214,8 +294,8 @@ bool host_protocol_rx(uint8_t *data, uint8_t length) {
             break;
 
         case HOST_GET_INDICATORS:
-            reply_indicators(data[1], reply);
-            host_send(reply);
+            reply_indicators(len, data[1], reply);
+            host_send(link, reply);
             break;
 
         case HOST_SET_INDICATOR_COLOR: {
@@ -250,6 +330,14 @@ bool host_protocol_rx(uint8_t *data, uint8_t length) {
             // Unknown command in our range: swallow it so nobody else answers
             break;
     }
+
+#ifdef LK_WIRELESS_ENABLE
+    // A host that speaks up while the keyboard is idle (e.g. it just started)
+    // hears so, and waits for the next heartbeat
+    if (link == HOST_LINK_WIRELESS && wl_idle) {
+        wl_send_heartbeat(true);
+    }
+#endif
     return true;
 }
 
@@ -281,7 +369,7 @@ static void notify_mods(void) {
     uint8_t packet[HOST_PACKET_LEN] = {0};
     packet[0]                  = HOST_NOTIFY_MODS;
     packet[1]                  = want;
-    host_send(packet);
+    host_send(HOST_LINK_USB, packet);
     mods_reported = want;
 }
 
@@ -293,10 +381,55 @@ void host_notify_rgb_key(uint8_t key) {
     uint8_t packet[HOST_PACKET_LEN] = {0};
     packet[0]                  = HOST_NOTIFY_RGB_KEY;
     packet[1]                  = key;
-    host_send(packet);
+    host_send(HOST_LINK_USB, packet);
 }
 
+#ifdef LK_WIRELESS_ENABLE
+static void wl_task(void) {
+    if (!wl_link_mode()) {
+        // Left 2.4 GHz: whoever is on the other end now introduces itself again
+        wl_host = wl_confirmed = wl_idle = wl_was_connected = false;
+        return;
+    }
+    bool connected = wireless_get_state() == WT_CONNECTED;
+    bool came_up   = connected && !wl_was_connected;
+    wl_was_connected = connected;
+    if (!connected || !wl_host) return;
+
+    if (wl_keyboard_idle()) {
+        if (!wl_idle) {
+            wl_idle = true;
+            wl_send_heartbeat(true);
+        }
+        return;
+    }
+
+    if (wl_idle || came_up) {
+        // In use again (key press, or the link is back): the host gets a
+        // moment to answer, as if it had just spoken
+        wl_idle         = false;
+        wl_confirmed    = false;
+        wl_last_contact = timer_read32();
+        wl_send_heartbeat(false);
+        return;
+    }
+
+    if (timer_elapsed32(wl_last_contact) >= HOST_LISTEN_TIMEOUT_MS) {
+        // No answer to the last heartbeats: no host (another computer, or
+        // kbd-daemon stopped). Quiet until one speaks.
+        wl_host = wl_confirmed = false;
+        return;
+    }
+    if (timer_elapsed32(wl_last_beat) >= HOST_HEARTBEAT_MS) {
+        wl_send_heartbeat(false);
+    }
+}
+#endif
+
 void host_protocol_task(void) {
+#ifdef LK_WIRELESS_ENABLE
+    wl_task();
+#endif
     // Also cleared here, so the 32-bit timer wrapping can't bring a long-gone
     // host back
     if (contacted && timer_elapsed32(last_contact) >= HOST_LISTEN_TIMEOUT_MS) {
@@ -334,12 +467,19 @@ void host_protocol_task(void) {
         notify_pending = true;
     }
     // Without a listening host the change is simply adopted: a host reads the
-    // whole state when it connects
-    if (notify_pending && host_listening()) {
+    // whole state when it connects (or, over 2.4 GHz, on the next heartbeat)
+    if (notify_pending) {
         uint8_t packet[HOST_PACKET_LEN] = {0};
-        packet[0]                  = HOST_NOTIFY_STATE;
+        packet[0]                       = HOST_NOTIFY_STATE;
         memcpy(&packet[1], baseline_state, HOST_STATE_LEN);
-        host_send(packet);
+        if (host_listening()) {
+            host_send(HOST_LINK_USB, packet);
+        }
+#ifdef LK_WIRELESS_ENABLE
+        else if (wl_listening()) {
+            host_send(HOST_LINK_WIRELESS, packet);
+        }
+#endif
     }
     notify_pending = false;
 }

@@ -9,6 +9,7 @@
 #include "print.h"
 #ifdef LK_WIRELESS_ENABLE
 #    include "transport.h"
+#    include "raw_hid.h"
 #endif
 #ifdef KEYCHRON_RGB_ENABLE
 #    include "keychron_rgb_type.h"
@@ -972,7 +973,7 @@ static bool host_packet_rx(uint8_t *data, uint8_t length) {
     // ext-RGB toggle key only governs SignalRGB.
 #ifdef HOST_PROTOCOL_ENABLE
     // --- Host protocol (0xC0–0xCF) ---
-    if (host_protocol_rx(data, length)) {
+    if (host_protocol_rx(HOST_LINK_USB, data, length)) {
         return true;
     }
 #endif
@@ -1002,6 +1003,12 @@ void rgb_raw_hid_receive(uint8_t *data, uint8_t length) {
 #endif
 
 bool raw_hid_receive_shared(uint8_t src, uint8_t *data, uint8_t length) {
+#if defined(HOST_PROTOCOL_ENABLE) && defined(LK_WIRELESS_ENABLE)
+    // kbd-daemon over the 2.4 GHz dongle: the host protocol only
+    if (src != RAW_HID_SRC_USB) {
+        return host_protocol_rx(HOST_LINK_WIRELESS, data, length);
+    }
+#endif
 #ifndef RGB_RAW_ENABLE
     if (host_packet_rx(data, length)) {
         return true;

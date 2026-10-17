@@ -619,7 +619,9 @@ void wireless_event_task(void) {
 #    else
                 kc_raw_hid_rx(RAW_HID_SRC_WIRELESS, event.params.raw_hid_data, 32);
 #    endif
-                lpm_timer_reset();
+                /* A host service's traffic (host protocol, 0xC0-0xCF) isn't
+                 * someone using the keyboard: it mustn't keep it from sleeping */
+                if (event.params.raw_hid_data[0] < 0xC0 || event.params.raw_hid_data[0] > 0xCF) lpm_timer_reset();
                 break;
 #endif
             default:
