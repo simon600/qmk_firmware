@@ -275,6 +275,18 @@ void matrix_scan_user(void) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    // Hardware + Esc held BOOT_HOLD_MS: the bootloader. Unlike holding Esc while
+    // plugging in (bootmagic) it leaves the EEPROM alone. By position, not
+    // keycode: the keymap lives in EEPROM (VIA), which keymap.c only seeds.
+    // Any release stops it, Hardware let go first included
+    if (record->event.key.row == 0 && record->event.key.col == 0) {
+        if (!record->event.pressed) {
+            boot_hold(false);
+        } else if (layer_state_is(HARDWARE) || layer_state_is(HARDWARE2)) {
+            boot_hold(true);
+            return false;
+        }
+    }
     if (keycode == TG_GMG && record->event.pressed) {
         // Cycle off -> rapid trigger -> gamepad -> off
         gaming_set(gaming_profile_state == 0 ? 1 : gaming_profile_state == 1 ? 2 : 0);
