@@ -40,6 +40,11 @@ enum keymap_keycodes {
 bool           gaming_mode_enabled  = false;
 static uint8_t gaming_profile_state = 0; // 0=off, 1=profile1 (rapid trigger, maroon), 2=profile2 (gamepad, green)
 static uint8_t gaming_target        = 1; // HE profile to select when the GAMING layer turns on
+static uint8_t held_layer           = 0; // The held layer whose keys show, 0 none (host overlay)
+// The host's layer overlay only after / during the hold (Fn is held all the
+// time here); / then types nothing. Its release goes the same way
+static bool overlay_peek  = false;
+static bool slash_swallow = false;
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -287,6 +292,18 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             return false;
         }
     }
+    // Held layer + /: the host's overlay on (again: off) until the layer is let go
+    if (keycode == KC_SLSH) {
+        if (record->event.pressed && held_layer) {
+            overlay_peek  = !overlay_peek;
+            slash_swallow = true;
+            return false;
+        }
+        if (!record->event.pressed && slash_swallow) {
+            slash_swallow = false;
+            return false;
+        }
+    }
     if (keycode == TG_GMG && record->event.pressed) {
         // Cycle off -> rapid trigger -> gamepad -> off
         gaming_set(gaming_profile_state == 0 ? 1 : gaming_profile_state == 1 ? 2 : 0);
@@ -294,6 +311,19 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     }
     return process_record_shared(keycode, record);
 }
+
+// Every held layer lights / : it opens the host's layer overlay
+bool fn_layer_key_lit_through_user(uint16_t keycode) {
+    return keycode == KC_SLSH;
+}
+
+#ifdef HOST_PROTOCOL_ENABLE
+// The held layer (Fn, Hardware, Gaming 2) once / asked for it: the host shows
+// what its keys do
+uint8_t host_held_layer_user(void) {
+    return held_layer && overlay_peek ? held_layer : HOST_STATE_UNSUPPORTED;
+}
+#endif
 
 layer_state_t layer_state_set_user(layer_state_t state) {
     bool win_fn_active  = layer_state_cmp(state, WIN_FN);
@@ -323,6 +353,10 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 
     // Update shared state
     set_active_fn_layer(fn_layer);
+    // The host's overlay tells Hardware 2 from Hardware
+    held_layer = fn_layer == HARDWARE && layer_state_cmp(state, HARDWARE2) ? HARDWARE2 : fn_layer;
+    // Every hold starts without the overlay
+    if (!held_layer) overlay_peek = false;
 
     // Update gaming indicator using compile-time registry
     indicator_t *indicators             = get_indicators();
