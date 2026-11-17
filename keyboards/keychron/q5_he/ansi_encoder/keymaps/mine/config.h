@@ -7,7 +7,8 @@
 // Enable combo_should_trigger to conditionally disable combos on gaming layers
 #define COMBO_SHOULD_TRIGGER
 
-// Expand the number of layers to 9
+// Expand the number of layers to 9 (SignalRGB's config.h sets LAYER_STATE_8BIT)
+#undef LAYER_STATE_8BIT
 #define DYNAMIC_KEYMAP_LAYER_COUNT 9
 #define RGB_MATRIX_DEFAULT_MODE RGB_MATRIX_SOLID_COLOR
 #define RGB_MATRIX_DEFAULT_HUE 0

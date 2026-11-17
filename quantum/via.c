@@ -68,13 +68,26 @@
 static uint8_t rgb_matrix_value_id_mask;
 #endif
 
+static void via_build_magic(uint8_t *magic0, uint8_t *magic1, uint8_t *magic2) {
+    // Hash the full build timestamp (YYYY-MM-DD-HH:MM:SS) so a second build on
+    // the same day re-seeds the dynamic keymap from flash.
+    uint32_t h = 2166136261u;
+    for (const char *p = QMK_BUILDDATE; *p; p++) {
+        h = (h ^ (uint8_t)*p) * 16777619u;
+    }
+    *magic0 = h & 0xFF;
+    *magic1 = (h >> 8) & 0xFF;
+    *magic2 = (h >> 16) & 0xFF;
+    if (*magic0 == 0xFF && *magic1 == 0xFF && *magic2 == 0xFF) {
+        *magic0 = 0xFE;
+    }
+}
+
 // Can be called in an overriding via_init_kb() to test if keyboard level code usage of
 // EEPROM is invalid and use/save defaults.
 bool via_eeprom_is_valid(void) {
-    char *  p      = QMK_BUILDDATE; // e.g. "2019-11-05-11:29:54"
-    uint8_t magic0 = ((p[2] & 0x0F) << 4) | (p[3] & 0x0F);
-    uint8_t magic1 = ((p[5] & 0x0F) << 4) | (p[6] & 0x0F);
-    uint8_t magic2 = ((p[8] & 0x0F) << 4) | (p[9] & 0x0F);
+    uint8_t magic0, magic1, magic2;
+    via_build_magic(&magic0, &magic1, &magic2);
 
     uint8_t ee_magic0;
     uint8_t ee_magic1;
@@ -88,10 +101,8 @@ bool via_eeprom_is_valid(void) {
 // Keyboard level code (eg. via_init_kb()) should not call this
 void via_eeprom_set_valid(bool valid) {
     if (valid) {
-        char *  p      = QMK_BUILDDATE; // e.g. "2019-11-05-11:29:54"
-        uint8_t magic0 = ((p[2] & 0x0F) << 4) | (p[3] & 0x0F);
-        uint8_t magic1 = ((p[5] & 0x0F) << 4) | (p[6] & 0x0F);
-        uint8_t magic2 = ((p[8] & 0x0F) << 4) | (p[9] & 0x0F);
+        uint8_t magic0, magic1, magic2;
+        via_build_magic(&magic0, &magic1, &magic2);
         nvm_via_update_magic(magic0, magic1, magic2);
     } else {
         nvm_via_update_magic(0xFF, 0xFF, 0xFF);
