@@ -24,12 +24,12 @@ enum layers {
     MAC_FN,
     WIN_BASE,
     WIN_FN,
+    FN,
     HARDWARE,
     HARDWARE2,
 };
 
-#define FN_MAC MO(MAC_FN)
-#define FN_WIN MO(WIN_FN)
+#define FN_MO MO(FN)
 #define FN_LMAC LT(MAC_FN, KC_NO)
 #define FN_LWIN LT(WIN_FN, KC_NO)
 #define LALT_LEAD LALT_T(KC_NO)
@@ -51,14 +51,14 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_TAB,         KC_Q,       KC_W,     KC_E,       KC_R,       KC_T,       KC_Y,       KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,            KC_PGDN,
         GUI_T(KC_ESC),  KC_A,       KC_S,     KC_D,       KC_F,       KC_G,       KC_H,       KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,             KC_HOME,
         KC_LSFT,                    KC_Z,     KC_X,       KC_C,       KC_V,       KC_B,       KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,            KC_RSFT,  KC_UP,
-        KC_LCTL,        LALT_LEAD,  KC_LGUI,                                      LT(MAC_FN, KC_SPC),                       KC_RALT,    FN_MAC,   KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT),
+        KC_LCTL,        LALT_LEAD,  KC_LGUI,                                      LT(MAC_FN, KC_SPC),                       KC_RALT,    FN_MO,    KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT),
 
     [MAC_FN] = LAYOUT_ansi_82(
         _______,        KC_F1,      KC_F2,    KC_F3,      KC_F4,      KC_F5,      KC_F6,      KC_F7,    KC_F8,    KC_F9,    KC_F10,     KC_F11,   KC_F12,   _______,            _______,
-        _______,        MP1,        MP2,      _______,    G(KC_RGHT), _______,    _______,    _______,  _______,  _______,  G(KC_LEFT), _______,  _______,  _______,            _______,
-        CW_TOGG,        MS,         M_NM, A(KC_RIGHT),    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
-        KC_CAPS,        MR1,        MR2,      KC_DEL,     KC_BSPC,    _______,    KC_LEFT,    KC_DOWN,  KC_UP,    KC_RGHT,  _______,    _______,            _______,            KC_END,
-        _______,                    _______,  _______,    _______,    _______,    A(KC_LEFT), _______,  _______,  QK_LEAD,  _______,    _______,            _______,  _______,
+        _______,        MP1,        MP2,      _______,    G(KC_RGHT), _______,    _______,    _______,  _______,  _______,  G(KC_LEFT), _______,  _______,  KC_DEL,             _______,
+        CW_TOGG,        _______,    M_NM, A(KC_RIGHT),    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
+        KC_CAPS,        _______,    _______,  KC_DEL,     KC_BSPC,    _______,    KC_LEFT,    KC_DOWN,  KC_UP,    KC_RGHT,  _______,    _______,            _______,            KC_END,
+        _______,                    _______,  _______,    _______,    _______,    A(KC_LEFT), _______,  _______,  _______,  _______,    _______,            _______,  _______,
         _______,        _______,    FN_HRD,                                       _______,                                  _______,    _______,  _______,  _______,  _______,  _______),
 
     [WIN_BASE] = LAYOUT_ansi_82(
@@ -67,15 +67,23 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_TAB,         KC_Q,       KC_W,     KC_E,       KC_R,       KC_T,       KC_Y,       KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,            KC_PGDN,
         LCTL_T(KC_ESC), KC_A,       KC_S,     KC_D,       KC_F,       KC_G,       KC_H,       KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,             KC_HOME,
         KC_LSFT,                    KC_Z,     KC_X,       KC_C,       KC_V,       KC_B,       KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,            KC_RSFT,  KC_UP,
-        KC_LCTL,        KC_LWIN,    LALT_LEAD,                                    LT(WIN_FN, KC_SPC),                       KC_RALT,    FN_WIN,   KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT),
+        KC_LCTL,        KC_LWIN,    LALT_LEAD,                                    LT(WIN_FN, KC_SPC),                       KC_RALT,    FN_MO,    KC_RCTL,  KC_LEFT,  KC_DOWN,  KC_RGHT),
 
     [WIN_FN] = LAYOUT_ansi_82(
         _______,        KC_BRID,    KC_BRIU,  KC_TASK,    KC_FILE,    UG_VALD,    UG_VALU,    KC_MPRV,  KC_MPLY,  KC_MNXT,  KC_MUTE,    KC_VOLD,  KC_VOLU,  _______,            _______,
         _______,        MP1,        MP2,      _______,    KC_END,     _______,    _______,    _______,  _______,  _______,  KC_HOME,    _______,  _______,  KC_DEL,             _______,
-        CW_TOGG,        MS,         M_NW,  C(KC_RGHT),    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
-        KC_CAPS,        MR1,        MR2,      KC_DEL,     KC_BSPC,    _______,    KC_LEFT,    KC_DOWN,  KC_UP,    KC_RGHT,  _______,    _______,            _______,            KC_END,
-        _______,                    _______,  _______,    _______,    _______,    C(KC_LEFT), _______,  _______,  QK_LEAD,  _______,    _______,            _______,  _______,
-        _______,        _______,    _______,                                    _______,                                    _______,    _______,  _______,  _______,  _______,  _______),
+        CW_TOGG,        _______,    M_NW,  C(KC_RGHT),    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
+        KC_CAPS,        _______,    _______,  KC_DEL,     KC_BSPC,    _______,    KC_LEFT,    KC_DOWN,  KC_UP,    KC_RGHT,  _______,    _______,            _______,            KC_END,
+        _______,                    _______,  _______,    _______,    _______,    C(KC_LEFT), _______,  _______,  _______,  _______,    _______,            _______,  _______,
+        _______,        _______,    FN_HRD,                                     _______,                                    _______,    _______,  _______,  _______,  _______,  _______),
+
+    [FN] = LAYOUT_ansi_82(
+        _______,        KC_BRID,    KC_BRIU,  KC_TASK,    KC_FILE,    UG_VALD,    UG_VALU,    KC_MPRV,  KC_MPLY,  KC_MNXT,  KC_MUTE,    KC_VOLD,  KC_VOLU,  _______,            _______,
+        _______,        MP1,        MP2,      _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
+        CW_TOGG,        MS,         _______,  _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            _______,
+        KC_CAPS,        MR1,        MR2,      _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,            _______,            _______,
+        _______,                    _______,  _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,            _______,  _______,
+        _______,        _______,    FN_HRD,                                     _______,                                    _______,    _______,  _______,  _______,  _______,  _______),
 
     [HARDWARE] = LAYOUT_ansi_82(
         _______,        _______,    _______,  _______,    _______,    _______,    _______,    _______,  _______,  _______,  _______,    _______,  _______,  _______,            UG_TOGG,
@@ -100,6 +108,7 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
     [MAC_FN]   = {ENCODER_CCW_CW(MS_WHLU, MS_WHLR)},
     [WIN_BASE] = {ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
     [WIN_FN]   = {ENCODER_CCW_CW(MS_WHLU, MS_WHLD)},
+    [FN]       = {ENCODER_CCW_CW(MS_WHLU, MS_WHLD)},
     [HARDWARE] = {ENCODER_CCW_CW(UG_VALD, UG_VALU)},
     [HARDWARE2] = {ENCODER_CCW_CW(IND_BR_D, IND_BR_U)}
 };
@@ -130,12 +139,15 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 layer_state_t layer_state_set_user(layer_state_t state) {
     bool win_fn_active = layer_state_cmp(state, WIN_FN);
     bool mac_fn_active = layer_state_cmp(state, MAC_FN);
+    bool fn_active     = layer_state_cmp(state, FN);
     bool hardware_active = layer_state_cmp(state, HARDWARE);
 
     // Determine current FN layer
     uint8_t fn_layer = 0;
     if (hardware_active)
         fn_layer = HARDWARE;
+    else if (fn_active)
+        fn_layer = FN;
     else if (win_fn_active)
         fn_layer = WIN_FN;
     else if (mac_fn_active)
